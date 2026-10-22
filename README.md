@@ -29,7 +29,7 @@ Put the cursor in any text field, in any app, and dictate:
 - **Double-press** it to talk hands-free, then press it once more (or click ■ on the Flow bar) to stop.
 - **Esc** throws the dictation away, while you talk or while it's being transcribed.
 
-Your words are pasted where the cursor is, about a second after you stop. Lechuza puts them on the clipboard, presses ⌘V for you, and once the app has taken them puts back what the clipboard held before. If you switch to another app before they're ready, Lechuza doesn't paste them: they wait on Home. It boosts quiet input, so a whisper transcribes like normal speech.
+Your words are pasted where the cursor is, about a second after you stop. Lechuza puts them on the clipboard, presses ⌘V for you, and 2 seconds later puts back what the clipboard held before. If you switch to another app before they're ready, Lechuza doesn't paste them: they wait on Home. It boosts quiet input, so a whisper transcribes like normal speech.
 
 The **Flow bar** is a small pill at the bottom of the screen, on every Space and over full-screen apps. It never takes focus from the app you're typing in. Point at it and click to start dictating. While you talk it shows a live waveform, then dots while Parakeet transcribes. A red edge means something went wrong; point at it to read what. A short sound plays when dictation starts and stops (turn it off in Settings).
 

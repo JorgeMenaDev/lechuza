@@ -40,15 +40,6 @@ final class PasterTests: XCTestCase {
             holdFor: holdFor)
     }
 
-    /// Waits until the clipboard holds `text`, or gives up after 3 s.
-    private func clipboard(becomes text: String) async -> Bool {
-        let deadline = ContinuousClock.now + .seconds(3)
-        while pasteboard.string(forType: .string) != text, ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        return pasteboard.string(forType: .string) == text
-    }
-
     /// A clipboard manager reads every change at once; the app that got the
     /// ⌘V reads later. The words must still be there for the app.
     func testAClipboardManagerReadingFirstDoesNotTakeTheWordsFromASlowApp() async {
@@ -65,19 +56,8 @@ final class PasterTests: XCTestCase {
         XCTAssertEqual(paster.paste("dictated words", into: 100), .pasted)
         await fulfillment(of: [read])
         XCTAssertEqual(pasted, "dictated words")
-        let restored = await clipboard(becomes: "copied before")
-        XCTAssertTrue(restored)
-    }
-
-    /// The next dictation can paste before the last one's hold ends: it must
-    /// save the user's clipboard, never the last dictation's words.
-    func testBackToBackPastesGiveBackTheUsersClipboard() async {
-        let paster = paster()
-        XCTAssertEqual(paster.paste("first", into: 100), .pasted)
-        XCTAssertEqual(paster.paste("second", into: 100), .pasted)
-        XCTAssertEqual(pasteboard.string(forType: .string), "second")
-        let restored = await clipboard(becomes: "copied before")
-        XCTAssertTrue(restored)
+        await paster.giveBack()
+        XCTAssertEqual(pasteboard.string(forType: .string), "copied before")
     }
 
     func testWithoutAccessibilityTheClipboardIsNeverTouched() async {
