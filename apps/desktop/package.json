@@ -42,7 +42,8 @@
       "minimumSystemVersion": "15.0",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Lechuza records your microphone during meetings, so you can replay and read them. Audio never leaves this Mac.",
-        "NSAudioCaptureUsageDescription": "Lechuza records the call's audio, the other side of your meetings, so you can replay and read them. Audio never leaves this Mac."
+        "NSAudioCaptureUsageDescription": "Lechuza records the call's audio, the other side of your meetings, so you can replay and read them. Audio never leaves this Mac.",
+        "NSDocumentsFolderUsageDescription": "Lechuza saves each meeting as plain files in Documents → Lechuza → Meetings."
       },
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist"

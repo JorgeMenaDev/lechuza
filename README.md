@@ -38,7 +38,7 @@ Lechuza has no echo cancellation yet: without headphones, your microphone also h
 
 ## Permissions
 
-The first meeting asks for **Microphone** and **System Audio Recording**, both for Lechuza. If you said no, allow them in System Settings → Privacy & Security, then start a new meeting.
+Lechuza asks for three permissions, all in its own name: **Documents** at first launch (meetings are saved there), then **Microphone** and **System Audio Recording** at the first meeting. If you said no, allow them in System Settings → Privacy & Security, then start a new meeting.
 
 Lechuza needs macOS 15 or later on Apple silicon.
 
