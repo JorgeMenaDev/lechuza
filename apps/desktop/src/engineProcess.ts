@@ -40,6 +40,13 @@ export class EngineProcess implements EngineLink {
       });
     }
     child.on("error", (error) => console.error(`lechuza-engine: ${error.message}`));
+    // A write after the engine closed its stdin fails with EPIPE. Unhandled,
+    // that would crash main; instead the engine counts as failed: killing it
+    // fires "close", which reports the exit.
+    child.stdin?.on("error", (error) => {
+      console.error(`lechuza-engine stdin: ${error.message}`);
+      child.kill();
+    });
     child.on("close", () => {
       if (this.child !== child) return;
       this.child = null;
