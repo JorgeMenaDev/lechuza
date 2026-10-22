@@ -130,6 +130,11 @@ describe("MeetingLibrary", () => {
     expect(await library.untranscribed()).toEqual(["2026-10-21-1500"]);
   });
 
+  test("finds recordings the engine crashed on, so they are recovered", async () => {
+    await session("2026-10-22-1405", { "recording.json": meta("2026-10-22T14:05:09Z", 0), "mic.aac": "cut short" });
+    expect(await library.untranscribed()).toEqual(["2026-10-22-1405"]);
+  });
+
   test("refuses ids that leave the meetings folder", () => {
     expect(library.dir("2026-10-20-0900")).toBe(path.join(root, "2026-10-20-0900"));
     expect(library.dir("../Documents")).toBeNull();

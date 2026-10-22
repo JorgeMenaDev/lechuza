@@ -132,6 +132,11 @@ final class Engine {
         try? FileManager.default.removeItem(at: errorURL)
         emit(.transcriptionStarted(dir: path))
         do {
+            // A recording the engine never stopped (it crashed) has only its
+            // manifest. The one being recorded now is left alone.
+            if session?.dir.standardizedFileURL.path != dir.standardizedFileURL.path {
+                try SessionMeta.recoverIfCrashed(dir)
+            }
             let (inputs, captureStatus) = try SessionMeta.readInputs(from: dir)
             if !FileManager.default.fileExists(atPath: dir.appendingPathComponent(Mixer.fileName).path) {
                 try await Mixer.mix(inputs, in: dir)

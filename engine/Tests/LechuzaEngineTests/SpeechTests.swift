@@ -94,6 +94,46 @@ final class SpeechTests: XCTestCase {
         XCTAssertEqual(duration, Double(themOffsetMs) / 1000 + spanish, accuracy: 0.5)
     }
 
+    /// The engine died mid-meeting: no meta.json, only the manifest and an
+    /// ADTS track it never closed. Transcribing (at launch or on Retry)
+    /// recovers the meeting first.
+    func testRecoversAndTranscribesARecordingTheEngineNeverStopped() async throws {
+        let aiff = dir.appendingPathComponent("mic.aiff")
+        try run("/usr/bin/say", ["-v", "Samantha", "-o", aiff.path, "The weather in London is cloudy today."])
+        try run("/usr/bin/afconvert", ["-f", "adts", "-d", "aac", aiff.path, dir.appendingPathComponent("mic.aac").path])
+        let audio = try AVAudioFile(forReading: dir.appendingPathComponent("mic.aac"))
+        let seconds = Double(audio.length) / audio.fileFormat.sampleRate
+        try SessionMeta(
+            schema_version: 2, started: "2026-10-22T14:05:09Z", ended: "2026-10-22T14:05:09Z",
+            duration_seconds: 0, status: .incomplete,
+            tracks: [
+                SessionMeta.Track(
+                    kind: .mic, speaker: "me", status: .incomplete,
+                    segments: [
+                        SessionMeta.Segment(
+                            file: "mic.aac", start_offset_ms: 300, end_offset_ms: 300,
+                            frames_written: 0, sample_rate_hz: 0, channels: 0)
+                    ],
+                    interruptions: [], warnings: [])
+            ]
+        ).write(to: dir, as: SessionMeta.manifestFile)
+
+        let events = EventLog()
+        let engine = Engine(emit: events.append)
+        await engine.run(.transcriptionStart(dir: dir.path))
+
+        XCTAssertEqual(events.all.last, .transcriptionDone(dir: dir.path))
+        let meta = try JSONDecoder().decode(SessionMeta.self, from: Data(contentsOf: dir.appendingPathComponent("meta.json")))
+        XCTAssertEqual(meta.status, .incomplete)
+        XCTAssertEqual(meta.duration_seconds, Int(0.3 + seconds))
+        XCTAssertEqual(meta.tracks[0].segments[0].end_offset_ms, 300 + Int(seconds * 1000), accuracy: 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: dir.appendingPathComponent(SessionMeta.manifestFile).path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir.appendingPathComponent(Mixer.fileName).path))
+        let transcript = try JSONDecoder().decode(
+            Transcript.self, from: Data(contentsOf: dir.appendingPathComponent("transcript.json")))
+        XCTAssertTrue(transcript.segments.map(\.text).joined().lowercased().contains("weather"), "\(transcript)")
+    }
+
     func testFailureLeavesItsReasonForTheApp() async throws {
         let events = EventLog()
         let engine = Engine(emit: events.append)

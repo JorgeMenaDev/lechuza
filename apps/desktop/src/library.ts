@@ -7,6 +7,7 @@ import { MEDIA_SCHEME, type Meeting, type MeetingState, type TranscriptLine } fr
 // named <yyyy-MM-dd-HHmm> (with -2, -3… on a clash). The engine writes:
 //   mic.aac, system.aac    the two tracks (mic-002.aac… after a capture restart)
 //   meeting.m4a            the mix the app plays
+//   recording.json         the segments so far, while recording; a crash leaves it behind
 //   meta.json              times and tracks; the app adds `title` on rename
 //   transcript.json / .md  the me / them transcript
 //   transcript-error.txt   why the last transcription failed
@@ -14,6 +15,7 @@ import { MEDIA_SCHEME, type Meeting, type MeetingState, type TranscriptLine } fr
 const FOLDER_NAME = /^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(?:-\d+)?$/;
 export const MIX_FILE = "meeting.m4a";
 const ERROR_FILE = "transcript-error.txt";
+const MANIFEST_FILE = "recording.json";
 
 // What main knows about meetings that disk doesn't say yet.
 export interface LiveMeetings {
@@ -136,17 +138,19 @@ export class MeetingLibrary {
     if (dir) await fs.writeFile(path.join(dir, ERROR_FILE), `${message}\n`);
   }
 
-  // Finished meetings with neither a transcript nor a failure: transcription
-  // was cut short, so it runs again at launch. Oldest first.
+  // Meetings with neither a transcript nor a failure, so transcription runs
+  // at launch: finished ones whose transcription was cut short, and ones the
+  // engine crashed on while recording (only the manifest), which it recovers
+  // first. Oldest first.
   async untranscribed(): Promise<string[]> {
     const names = await fs.readdir(this.root).catch(() => []);
     const pending = await Promise.all(
       names.filter((name) => FOLDER_NAME.test(name)).map(async (id) => {
         const dir = path.join(this.root, id);
-        const [meta, transcript, error] = await Promise.all(
-          ["meta.json", "transcript.json", ERROR_FILE].map((file) => exists(path.join(dir, file))),
+        const [meta, manifest, transcript, error] = await Promise.all(
+          ["meta.json", MANIFEST_FILE, "transcript.json", ERROR_FILE].map((file) => exists(path.join(dir, file))),
         );
-        return meta && !transcript && !error ? [id] : [];
+        return (meta || manifest) && !transcript && !error ? [id] : [];
       }),
     );
     return pending.flat().sort();

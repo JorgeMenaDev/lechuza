@@ -1,7 +1,9 @@
 import Foundation
 
 /// One meeting recording: a timestamped folder holding two independent tracks
-/// (mic = you, system = them) plus a meta.json written on clean stop. Tracks
+/// (mic = you, system = them) plus a meta.json written on clean stop. Until
+/// then a manifest (recording.json) lists every segment that has started
+/// writing, so a crashed recording can still be recovered. Tracks
 /// are separate on purpose — speech models do better on clean single-source audio,
 /// and two tracks give free two-party diarization.
 ///
@@ -50,6 +52,8 @@ final class RecordingSession {
     private let tracks: [TrackState]
     private var watchdog: Task<Void, Never>?
     private var live = false
+    /// The manifest as last written, so it's rewritten only when it changes.
+    private var manifest: SessionMeta?
 
     private static let folderFormat: DateFormatter = {
         let f = DateFormatter()
@@ -104,6 +108,7 @@ final class RecordingSession {
             }
         }
         live = true
+        writeManifest()
         startWatchdog()
     }
 
@@ -155,7 +160,9 @@ final class RecordingSession {
         )
         do {
             try meta.write(to: dir)
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent(SessionMeta.manifestFile))
         } catch {
+            // The manifest stays, so the meeting can still be recovered.
             FileHandle.standardError.write(Data("meta.json write failed: \(error)\n".utf8))
         }
         return StopResult(dir: dir, status: worst)
@@ -176,6 +183,7 @@ final class RecordingSession {
                 execute(command, on: track)
             }
         }
+        writeManifest()
     }
 
     /// The latest buffer peak (0–1) of each track, for live level meters.
@@ -187,6 +195,41 @@ final class RecordingSession {
     }
 
     // MARK: -
+
+    /// Write recording.json when its segments changed: every finished
+    /// segment, plus the live one once it has written. The live segment's
+    /// length is unknown until it stops; recovery reads it from the file.
+    private func writeManifest() {
+        let trackMetas = tracks.map { track in
+            var segments = track.segments
+            let liveFile = track.recorder.kind.segmentFile(index: track.segmentIndex)
+            if let first = track.recorder.telemetry().firstWriteMs, !segments.contains(where: { $0.file == liveFile }) {
+                segments.append(
+                    SessionMeta.Segment(
+                        file: liveFile, start_offset_ms: first, end_offset_ms: first,
+                        frames_written: 0, sample_rate_hz: 0, channels: 0))
+            }
+            return SessionMeta.Track(
+                kind: track.recorder.kind,
+                speaker: track.recorder.kind.speaker,
+                status: .incomplete,
+                segments: segments,
+                interruptions: track.machine?.interruptions ?? [],
+                warnings: track.machine?.warnings ?? []
+            )
+        }
+        let started = ISO8601DateFormatter().string(from: startedAt)
+        let manifest = SessionMeta(
+            schema_version: 2, started: started, ended: started, duration_seconds: 0,
+            status: .incomplete, tracks: trackMetas.sorted { $0.kind == .mic && $1.kind != .mic })
+        guard manifest != self.manifest else { return }
+        do {
+            try manifest.write(to: dir, as: SessionMeta.manifestFile)
+            self.manifest = manifest
+        } catch {
+            FileHandle.standardError.write(Data("recording.json write failed: \(error)\n".utf8))
+        }
+    }
 
     private func startWatchdog() {
         watchdog = Task { [weak self] in

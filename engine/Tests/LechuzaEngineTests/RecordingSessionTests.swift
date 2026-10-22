@@ -137,6 +137,31 @@ final class RecordingSessionTests: XCTestCase {
         XCTAssertTrue(meta.tracks[0].interruptions.isEmpty)
     }
 
+    func testKeepsAManifestOfItsSegmentsUntilItStops() throws {
+        func manifestURL(_ session: RecordingSession) -> URL {
+            session.dir.appendingPathComponent(SessionMeta.manifestFile)
+        }
+        func manifestFiles(_ session: RecordingSession) throws -> [String: [String]] {
+            let manifest = try JSONDecoder().decode(SessionMeta.self, from: Data(contentsOf: manifestURL(session)))
+            return Dictionary(uniqueKeysWithValues: manifest.tracks.map { ($0.kind.rawValue, $0.segments.map(\.file)) })
+        }
+        let session = try makeSession()
+        try session.start()
+        tick(session, at: 1000)
+        XCTAssertEqual(try manifestFiles(session), ["mic": ["mic.aac"], "system": ["system.aac"]])
+
+        // A restarted segment joins once it writes.
+        mic.writes(first: 500, last: 1000)
+        tick(session, at: 6000, micStalled: true)
+        tick(session, at: 7000)
+        XCTAssertEqual(try manifestFiles(session)["mic"], ["mic.aac", "mic-002.aac"])
+
+        time.ms = 8000
+        _ = session.stop()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: manifestURL(session).path))
+        XCTAssertNoThrow(try readMeta(session))
+    }
+
     func testStallRotatesOnceAndRecoversWithoutTouchingOtherTrack() throws {
         let session = try makeSession()
         try session.start()
