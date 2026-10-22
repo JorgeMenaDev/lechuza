@@ -46,10 +46,13 @@ enum TrackKind: String, Codable, CaseIterable, Sendable {
     /// Human-readable name for menu and notification text.
     var label: String { self == .mic ? "microphone" : "system audio" }
 
-    /// Base file name of the track's first segment ("mic.caf"); later
-    /// segments append a counter ("mic-002.caf").
+    /// Base file name of the track's first segment ("mic.aac"); later
+    /// segments append a counter ("mic-002.aac"). ADTS AAC, whose frames
+    /// each carry their own header: a file the engine never closed (it
+    /// crashed) still reads back. AAC in CAF needs a packet table written
+    /// on close, so a crash left it unreadable.
     func segmentFile(index: Int) -> String {
-        index <= 1 ? "\(rawValue).caf" : String(format: "%@-%03d.caf", rawValue, index)
+        index <= 1 ? "\(rawValue).aac" : String(format: "%@-%03d.aac", rawValue, index)
     }
 }
 

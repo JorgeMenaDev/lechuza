@@ -39,7 +39,7 @@ Each meeting is a plain folder in `~/Documents/Lechuza/Meetings/<yyyy-MM-dd-HHmm
 
 | File | What it is |
 | --- | --- |
-| `mic.caf`, `system.caf` | The two tracks, AAC. A capture restart adds `mic-002.caf`… |
+| `mic.aac`, `system.aac` | The two tracks, AAC (ADTS, so a crash never leaves them unreadable). A capture restart adds `mic-002.aac`… |
 | `meeting.m4a` | Both tracks mixed, for playback |
 | `transcript.md`, `transcript.json` | The `me` / `them` transcript with timestamps |
 | `meta.json` | Start, length, track health and your title |

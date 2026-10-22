@@ -5,7 +5,7 @@ import { MEDIA_SCHEME, type Meeting, type MeetingState, type TranscriptLine } fr
 
 // Meetings live as plain folders under the meetings root, one per meeting,
 // named <yyyy-MM-dd-HHmm> (with -2, -3… on a clash). The engine writes:
-//   mic.caf, system.caf    the two tracks (mic-002.caf… after a capture restart)
+//   mic.aac, system.aac    the two tracks (mic-002.aac… after a capture restart)
 //   meeting.m4a            the mix the app plays
 //   meta.json              times and tracks; the app adds `title` on rename
 //   transcript.json / .md  the me / them transcript

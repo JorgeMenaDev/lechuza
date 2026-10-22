@@ -133,7 +133,7 @@ final class RecordingSessionTests: XCTestCase {
         XCTAssertEqual(meta.schema_version, 2)
         XCTAssertEqual(meta.status, .complete)
         XCTAssertEqual(meta.tracks.map(\.kind), [.mic, .system])
-        XCTAssertEqual(meta.tracks[0].segments.map(\.file), ["mic.caf"])
+        XCTAssertEqual(meta.tracks[0].segments.map(\.file), ["mic.aac"])
         XCTAssertTrue(meta.tracks[0].interruptions.isEmpty)
     }
 
@@ -145,8 +145,8 @@ final class RecordingSessionTests: XCTestCase {
         // Mic stalls; system keeps writing. Detection rotates the mic once.
         mic.writes(first: 500, last: 1000)
         tick(session, at: 6000, micStalled: true)
-        XCTAssertEqual(mic.startedFiles, ["mic.caf", "mic-002.caf"])
-        XCTAssertEqual(system.startedFiles, ["system.caf"])
+        XCTAssertEqual(mic.startedFiles, ["mic.aac", "mic-002.aac"])
+        XCTAssertEqual(system.startedFiles, ["system.aac"])
 
         // Replacement segment stabilizes; later stop is a recovered session.
         for ms in stride(from: 7000, through: 13000, by: 1000) {
@@ -161,13 +161,13 @@ final class RecordingSessionTests: XCTestCase {
         let meta = try readMeta(session)
         let micTrack = meta.tracks.first { $0.kind == .mic }!
         XCTAssertEqual(micTrack.status, .recovered)
-        XCTAssertEqual(micTrack.segments.map(\.file), ["mic.caf", "mic-002.caf"])
+        XCTAssertEqual(micTrack.segments.map(\.file), ["mic.aac", "mic-002.aac"])
         XCTAssertEqual(micTrack.segments[0].end_offset_ms, 1000)
         XCTAssertEqual(micTrack.interruptions.count, 1)
         XCTAssertNotNil(micTrack.interruptions[0].recovered_offset_ms)
         let systemTrack = meta.tracks.first { $0.kind == .system }!
         XCTAssertEqual(systemTrack.status, .complete)
-        XCTAssertEqual(systemTrack.segments.map(\.file), ["system.caf"])
+        XCTAssertEqual(systemTrack.segments.map(\.file), ["system.aac"])
     }
 
     func testExhaustedRetriesDegradeOnceAndFinalizeIncomplete() throws {
@@ -227,7 +227,7 @@ final class RecordingSessionTests: XCTestCase {
 
         // Metadata is still parseable and truthful.
         let meta = try readMeta(session)
-        XCTAssertEqual(meta.tracks.first { $0.kind == .mic }!.segments.map(\.file), ["mic.caf"])
+        XCTAssertEqual(meta.tracks.first { $0.kind == .mic }!.segments.map(\.file), ["mic.aac"])
     }
 
     func testATeardownThatTimesOutDegradesTheTrackWithoutRestartingIt() throws {
@@ -253,7 +253,7 @@ final class RecordingSessionTests: XCTestCase {
         XCTAssertEqual(result.status, .incomplete)
         let micTrack = try readMeta(session).tracks.first { $0.kind == .mic }!
         XCTAssertEqual(micTrack.status, .incomplete)
-        XCTAssertEqual(micTrack.segments.map(\.file), ["mic.caf"])
+        XCTAssertEqual(micTrack.segments.map(\.file), ["mic.aac"])
     }
 
     func testStartupFailureRollsBackStartedTracks() throws {
@@ -261,7 +261,7 @@ final class RecordingSessionTests: XCTestCase {
         let session = try makeSession()
         XCTAssertThrowsError(try session.start())
         // System started first and must be torn down again.
-        XCTAssertEqual(system.startedFiles, ["system.caf"])
+        XCTAssertEqual(system.startedFiles, ["system.aac"])
         XCTAssertNil(system.stop().stats)  // already stopped by rollback
     }
 }

@@ -54,7 +54,7 @@ describe("MeetingLibrary.list", () => {
       "transcript-error.txt": "No audio was recorded.\n",
     });
     await session("2026-10-21-1500", { "meta.json": meta("2026-10-21T15:00:00Z", 600), "meeting.m4a": "audio" });
-    await session("2026-10-22-1405", { "mic.caf": "live" });
+    await session("2026-10-22-1405", { "mic.aac": "live" });
 
     const meetings = await library.list({
       recording: { id: "2026-10-22-1405", startedAt: Date.parse("2026-10-22T14:05:09Z") },
@@ -75,7 +75,7 @@ describe("MeetingLibrary.list", () => {
   });
 
   test("a folder the engine never finished is failed, with a reason", async () => {
-    await session("2026-10-22-0800", { "mic.caf": "cut short" });
+    await session("2026-10-22-0800", { "mic.aac": "cut short" });
     const [meeting] = await library.list(idle);
     expect(meeting?.state).toBe("failed");
     expect(meeting?.error).toBe("The recording stopped before it was saved.");
@@ -126,7 +126,7 @@ describe("MeetingLibrary", () => {
     await session("2026-10-20-0900", { "meta.json": meta("2026-10-20T09:00:05Z", 1800), "transcript.json": transcript });
     await session("2026-10-21-1000", { "meta.json": meta("2026-10-21T10:00:00Z", 60), "transcript-error.txt": "x" });
     await session("2026-10-21-1500", { "meta.json": meta("2026-10-21T15:00:00Z", 600) });
-    await session("2026-10-22-1405", { "mic.caf": "live" });
+    await session("2026-10-22-1405", { "mic.aac": "live" });
     expect(await library.untranscribed()).toEqual(["2026-10-21-1500"]);
   });
 
