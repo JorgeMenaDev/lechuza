@@ -47,16 +47,26 @@ final class KeyFilterTests: XCTestCase {
     /// → held, then the hotkey: a shortcut, so neither its press nor its
     /// release reaches the gesture (in hands-free, that release would stop it).
     func testAHotkeyPressedWhileAnotherKeyIsHeldIsAShortcut() {
+        var arrowHeld = true
+        filter = KeyFilter(hotkey: .rightOption) { $0 == 124 && arrowHeld }
         let arrowDown = KeyFilter.Event.keyDown(keyCode: 124, isRepeat: false)
         let arrowRepeat = KeyFilter.Event.keyDown(keyCode: 124, isRepeat: true)
         XCTAssertEqual(inputs([arrowDown, optionDown, arrowRepeat, optionUp]), [.otherKey, nil, nil, nil])
+        arrowHeld = false
         XCTAssertEqual(inputs([.keyUp(keyCode: 124), optionDown]), [nil, .press], "once → is up, the hotkey counts")
     }
 
-    /// Secure input hides key-ups from the tap: a key Lechuza still thinks is
-    /// held must not block the hotkey once macOS says it is up.
-    func testAKeyWhoseReleaseWentMissingDoesNotBlockTheHotkey() {
-        filter = KeyFilter(hotkey: .rightOption, isKeyDown: { _ in false })
-        XCTAssertEqual(inputs([.keyDown(keyCode: 124, isRepeat: false), optionDown]), [.otherKey, .press])
+    /// The tap never saw → go down (it was off, or → was held before
+    /// Lechuza started): macOS still knows it is held.
+    func testAKeyHeldWhileTheTapWasOffStillMakesAShortcut() {
+        filter = KeyFilter(hotkey: .rightOption) { $0 == 124 }
+        XCTAssertEqual(inputs([.tapDisabled, optionDown, optionUp]), [.interrupted, nil, nil])
+    }
+
+    /// The hotkey itself, and a modifier held with it (⇧ here), don't make
+    /// it a shortcut.
+    func testAModifierHeldWithTheHotkeyStillCounts() {
+        filter = KeyFilter(hotkey: .rightOption) { $0 == 61 || $0 == 56 }
+        XCTAssertEqual(inputs([optionDown, optionUp]), [.press, .release])
     }
 }

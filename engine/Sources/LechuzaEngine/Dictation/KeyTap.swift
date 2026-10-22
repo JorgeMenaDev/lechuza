@@ -101,19 +101,19 @@ struct KeyFilter {
     }
 
     private static let escape: Int64 = 53
+    /// Every key code but the modifiers (54–63: ⌘ ⇧ ⇪ ⌥ ⌃ fn).
+    private static let keys: [Int64] = Array(0..<54) + Array(64..<128)
 
     let hotkey: Hotkey
-    /// Asks macOS whether a key is down now: secure input hides key-ups from
-    /// the tap, so `held` can list a key that is already up.
+    /// Asks macOS whether a key is down now. The tap can't keep count itself:
+    /// secure input hides key-ups, and it misses keys pressed while it was off.
     private let isKeyDown: (Int64) -> Bool
     private var down = false
     /// The hotkey went down while another key was held.
     private var chord = false
-    /// Other keys down now, as far as the tap has seen.
-    private var held: Set<Int64> = []
     private var swallowingEscape = false
 
-    init(hotkey: Hotkey, isKeyDown: @escaping (Int64) -> Bool = { _ in true }) {
+    init(hotkey: Hotkey, isKeyDown: @escaping (Int64) -> Bool = { _ in false }) {
         self.hotkey = hotkey
         self.isKeyDown = isKeyDown
     }
@@ -125,23 +125,18 @@ struct KeyFilter {
         case .flagsChanged(let keyCode, let flags):
             guard let isDown = hotkey.isDown(keyCode: keyCode, flags: flags), isDown != down else { return (nil, false) }
             down = isDown
-            if isDown {
-                held = held.filter(isKeyDown)
-                chord = !held.isEmpty
-            }
+            if isDown { chord = Self.keys.contains(where: isKeyDown) }
             return (chord ? nil : isDown ? .press : .release, false)
         case .keyDown(Self.escape, _):
             guard escapeIsOurs else { return (nil, false) }
             swallowingEscape = true
             return (.escape, true)
-        case .keyDown(let keyCode, let isRepeat):
-            held.insert(keyCode)
+        case .keyDown(_, let isRepeat):
             return (isRepeat ? nil : .otherKey, false)
         case .keyUp(Self.escape) where swallowingEscape:
             swallowingEscape = false
             return (nil, true)
-        case .keyUp(let keyCode):
-            held.remove(keyCode)
+        case .keyUp:
             return (nil, false)
         case .tapDisabled:
             // A release may be among the missing events: start over with the key up.

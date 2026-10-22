@@ -180,6 +180,9 @@ final class Dictation {
                 text: text, startedAt: ISO8601DateFormatter().string(from: dictated.startedAt),
                 durationMs: dictated.spokenMs))
         finished(dictated, failure: outcome.problem)
+        // The next dictation waits its turn here, so it can't replace these
+        // words before the app reads them.
+        await paster.giveBack()
     }
 
     /// A dictation is done with, unless Esc threw it away first.

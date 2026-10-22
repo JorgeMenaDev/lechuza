@@ -38,8 +38,8 @@ final class Paster {
     /// How long the words stay on the clipboard: an app busy enough to take
     /// longer to handle ⌘V is rare.
     private let holdFor: Duration
-    /// The clipboard as it was before the latest paste, until it is put back.
-    private var swapped: ClipboardSnapshot?
+    /// The clipboard as it was before the paste in its hold.
+    private var held: ClipboardSnapshot?
 
     init(system: System = .mac, holdFor: Duration = .seconds(2)) {
         self.system = system
@@ -51,26 +51,26 @@ final class Paster {
         system.frontmostApp()
     }
 
-    /// Pastes `text` into `target`; the clipboard comes back on its own.
+    /// Pastes `text` into `target`. Await `giveBack()` before the next paste:
+    /// the app may not have read these words yet.
     func paste(_ text: String, into target: pid_t?) -> Outcome {
+        assert(held == nil, "await giveBack() before the next paste, or a slow app reads the next dictation")
         guard system.trusted() else { return .noAccessibility }
         guard system.frontmostApp() == target else { return .appChanged }
-        // A paste still in its hold gives the clipboard back first, so this
-        // one saves the user's clipboard, not the last dictation.
-        swapped?.restore()
         let clipboard = ClipboardSnapshot(replacingWith: text, on: system.pasteboard)
         guard system.pressCommandV() else {
             clipboard.restore()
-            swapped = nil
             return .failed
         }
-        swapped = clipboard
-        Task { [weak self, holdFor] in
-            try? await Task.sleep(for: holdFor)
-            guard let self, swapped === clipboard else { return }
-            clipboard.restore()
-            swapped = nil
-        }
+        held = clipboard
         return .pasted
+    }
+
+    /// Waits out the hold, then puts the user's clipboard back.
+    func giveBack() async {
+        guard let held else { return }
+        try? await Task.sleep(for: holdFor)
+        held.restore()
+        self.held = nil
     }
 }

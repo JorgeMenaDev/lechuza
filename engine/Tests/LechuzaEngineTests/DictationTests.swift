@@ -64,6 +64,8 @@ final class DictationTests: XCTestCase {
     private var frontmost: pid_t = 100
     /// What the clipboard held at each ⌘V.
     private var pasted: [String] = []
+    /// What a slow app read from the clipboard 40 ms after each ⌘V.
+    private var read: [String] = []
 
     override func setUp() async throws {
         pasteboard = NSPasteboard(name: .init("app.lechuza.test.\(UUID().uuidString)"))
@@ -81,6 +83,9 @@ final class DictationTests: XCTestCase {
                 frontmostApp: { [unowned self] in frontmost },
                 pressCommandV: { [unowned self] in
                     pasted.append(pasteboard.string(forType: .string) ?? "")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.04) { [unowned self] in
+                        read.append(pasteboard.string(forType: .string) ?? "")
+                    }
                     return true
                 },
                 pasteboard: pasteboard),
@@ -160,5 +165,20 @@ final class DictationTests: XCTestCase {
         XCTAssertEqual(pasted, [])
         XCTAssertEqual(events.saved, ["For the other app."])
         XCTAssertTrue(events.failures.first?.contains("Saved in Lechuza") == true, "\(events.failures)")
+    }
+
+    /// Two dictations that finish together, into an app slow to handle ⌘V:
+    /// each gets its own words, and the user's clipboard comes back.
+    func testASlowAppGetsEachOfTwoQuickDictations() async {
+        pasteboard.clearContents()
+        pasteboard.setString("copied before", forType: .string)
+        let dictation = dictation(hearing: ["First.", "Second."])
+        dictation.handle(.press, at: 0)
+        dictation.handle(.release, at: 1)
+        dictation.handle(.press, at: 2)
+        dictation.handle(.release, at: 3)
+        await until { read.count == 2 && pasteboard.string(forType: .string) == "copied before" }
+        XCTAssertEqual(read, ["First.", "Second."])
+        XCTAssertEqual(pasteboard.string(forType: .string), "copied before")
     }
 }
