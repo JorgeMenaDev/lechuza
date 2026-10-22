@@ -3,7 +3,10 @@
     { "type": "meeting.start", "root": "/Users/me/Documents/Lechuza/Meetings" },
     { "type": "meeting.stop" },
     { "type": "transcription.start", "dir": "/Users/me/Documents/Lechuza/Meetings/2026-10-22-1405" },
-    { "type": "model.prepare" }
+    { "type": "model.prepare" },
+    { "type": "dictation.configure", "hotkey": "rightOption" },
+    { "type": "dictation.start" },
+    { "type": "dictation.stop" }
   ],
   "events": [
     { "type": "ready", "modelDownloaded": false },
@@ -33,6 +36,15 @@
       "dir": "/Users/me/Documents/Lechuza/Meetings/2026-10-22-1405",
       "message": "No audio was recorded."
     },
+    { "type": "dictation.state", "phase": "handsFree" },
+    { "type": "dictation.level", "level": 0.125 },
+    {
+      "type": "dictation.done",
+      "text": "Hola, ¿nos vemos a las tres?",
+      "startedAt": "2026-10-22T14:07:31Z",
+      "durationMs": 2400
+    },
+    { "type": "dictation.failed", "message": "Lechuza didn't hear anything." },
     { "type": "error", "message": "unreadable command: nope" }
   ]
 }

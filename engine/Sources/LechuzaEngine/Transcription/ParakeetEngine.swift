@@ -31,6 +31,8 @@ actor ParakeetEngine {
     static let model = "parakeet-tdt-0.6b-v3-coreml"
 
     private var manager: AsrManager?
+    // The load in progress, so callers that arrive during it share it.
+    private var loading: Task<Void, Error>?
 
     /// Whether the model files are already in FluidAudio's cache.
     static func isDownloaded() -> Bool {
@@ -44,19 +46,30 @@ actor ParakeetEngine {
     }
 
     /// Load the model, downloading it first if it is missing. Later calls
-    /// return at once.
+    /// return at once; calls during a load wait for it.
     func prepare() async throws {
-        guard manager == nil else { return }
-        let models = try await AsrModels.downloadAndLoad(version: .v3)
-        let manager = AsrManager()
-        try await manager.loadModels(models)
-        self.manager = manager
+        let task =
+            loading
+            ?? Task {
+                let models = try await AsrModels.downloadAndLoad(version: .v3)
+                let manager = AsrManager()
+                try await manager.loadModels(models)
+                self.manager = manager
+            }
+        loading = task
+        do {
+            try await task.value
+        } catch {
+            loading = nil
+            throw error
+        }
     }
 
     /// Unload the model, so the engine doesn't idle holding it in memory.
     func release() async {
         if let manager { await manager.cleanup() }
         manager = nil
+        loading = nil
     }
 
     /// Transcribe one audio file into sentence-sized segments. Call
@@ -88,6 +101,17 @@ actor ParakeetEngine {
                 : [TranscriptSegment(start: 0, end: result.duration, text: text)]
         }
         return Self.segments(from: words)
+    }
+
+    /// Transcribe 16 kHz mono samples (a dictation) to plain text. Call
+    /// `prepare` first. Audio under a second is padded with silence, since
+    /// Parakeet refuses clips under 0.3 s.
+    func transcribe(samples: [Float]) async throws -> String {
+        guard let manager else { throw ASRError.notInitialized }
+        var state = try TdtDecoderState()
+        let padded = samples + [Float](repeating: 0, count: max(0, 16_000 - samples.count))
+        let result = try await manager.transcribe(padded, decoderState: &state)
+        return result.text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// Group word timings into readable segments: break on sentence-ending

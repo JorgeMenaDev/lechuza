@@ -14,6 +14,7 @@ final class Engine {
     private var starting = false
     private var levels: Task<Void, Never>?
     private var download: Task<Void, Error>?
+    private lazy var dictation = Dictation(emit: emit, downloadModel: { [weak self] in try await self?.downloadModel() })
 
     init(emit: @escaping @Sendable (EngineEvent) -> Void) {
         self.emit = emit
@@ -40,6 +41,9 @@ final class Engine {
         case .meetingStop: await stopMeeting()
         case .transcriptionStart(let dir): await transcribe(dir)
         case .modelPrepare: try? await downloadModel()
+        case .dictationConfigure(let hotkey): dictation.configure(hotkey: hotkey)
+        case .dictationStart: dictation.start()
+        case .dictationStop: dictation.stop()
         }
     }
 

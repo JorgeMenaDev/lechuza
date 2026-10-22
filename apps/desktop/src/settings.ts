@@ -1,19 +1,27 @@
 import * as fs from "node:fs/promises";
 
-import type { Settings, Theme } from "@lechuza/contracts";
+import { HOTKEYS, type Hotkey, type Settings, type Theme } from "@lechuza/contracts";
 
 // Settings live in settings.json in the app's data folder. A missing or
 // malformed file, or a field from an older version, falls back to the default.
-const DEFAULTS: Settings = { theme: "system" };
+const DEFAULTS: Settings = { theme: "system", hotkey: "fn", sounds: true };
 const THEMES: ReadonlyArray<Theme> = ["system", "light", "dark"];
 
 export function isTheme(value: unknown): value is Theme {
   return THEMES.some((theme) => theme === value);
 }
 
+export function isHotkey(value: unknown): value is Hotkey {
+  return HOTKEYS.some((hotkey) => hotkey === value);
+}
+
 export function parseSettings(value: unknown): Settings {
-  const theme = typeof value === "object" && value !== null && "theme" in value ? value.theme : undefined;
-  return { theme: isTheme(theme) ? theme : DEFAULTS.theme };
+  const saved: Partial<Record<keyof Settings, unknown>> = typeof value === "object" && value !== null ? value : {};
+  return {
+    theme: isTheme(saved.theme) ? saved.theme : DEFAULTS.theme,
+    hotkey: isHotkey(saved.hotkey) ? saved.hotkey : DEFAULTS.hotkey,
+    sounds: typeof saved.sounds === "boolean" ? saved.sounds : DEFAULTS.sounds,
+  };
 }
 
 export async function loadSettings(file: string): Promise<Settings> {

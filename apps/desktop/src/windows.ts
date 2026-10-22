@@ -40,3 +40,54 @@ export function createMainWindow(): BrowserWindow {
   load(win, "main");
   return win;
 }
+
+// The Flow bar's window: room for the pill and a tooltip above it. Clicks
+// pass through all of it except the pill (see setFlowBarHover in main.ts).
+const FLOW_BAR = { width: 600, height: 100 };
+
+// The Flow bar: a transparent panel along the bottom centre of the screen,
+// over every Space and full-screen app. A panel never activates Lechuza, so
+// the app you are typing in keeps the focus.
+export function createFlowBarWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    ...FLOW_BAR,
+    type: "panel",
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    focusable: false,
+    skipTaskbar: true,
+    hiddenInMissionControl: true,
+    show: false,
+    webPreferences: {
+      preload: appFile("dist-electron/preload.cjs"),
+      contextIsolation: true,
+      sandbox: true,
+      // The waveform animates while another app is in front.
+      backgroundThrottling: false,
+    },
+  });
+  win.setAlwaysOnTop(true, "screen-saver");
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  win.setIgnoreMouseEvents(true, { forward: true });
+  placeFlowBar(win);
+  win.once("ready-to-show", () => win.showInactive());
+  load(win, "flow-bar");
+  return win;
+}
+
+// Bottom centre of the work area (above the Dock) of the screen with the pointer.
+export function placeFlowBar(win: BrowserWindow): void {
+  const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  win.setBounds({
+    x: Math.round(area.x + (area.width - FLOW_BAR.width) / 2),
+    y: area.y + area.height - FLOW_BAR.height,
+    ...FLOW_BAR,
+  });
+}

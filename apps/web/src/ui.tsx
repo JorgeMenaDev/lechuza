@@ -1,7 +1,7 @@
 import { Check, CircleDot, Copy, Square, type LucideIcon } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import { formatClock, type AppState, type Meeting, type MeetingState } from "@lechuza/contracts";
+import { formatClock, type AppState, type Hotkey, type Meeting, type MeetingState } from "@lechuza/contracts";
 
 import { lechuza, useNow } from "./bridge";
 
@@ -13,6 +13,14 @@ const STATE_LABELS: Record<MeetingState, string> = {
   transcribing: "Transcribing",
   ready: "Ready",
   failed: "Failed",
+};
+
+// Each dictation hotkey's name in Settings, and the key as text says it.
+export const HOTKEY_NAMES: Record<Hotkey, { readonly name: string; readonly key: string }> = {
+  fn: { name: "fn (🌐)", key: "fn" },
+  rightOption: { name: "Right Option", key: "right ⌥" },
+  rightCommand: { name: "Right Command", key: "right ⌘" },
+  controlOption: { name: "Control + Option", key: "⌃⌥" },
 };
 
 // "9:19 pm", in the Mac's locale.
@@ -71,25 +79,25 @@ export function RecordButton({ state }: { state: AppState }) {
   }
 }
 
-// Copies the meeting's transcript, then shows a tick for a moment.
-export function CopyTranscriptButton({ id, iconOnly = false }: { id: string; iconOnly?: boolean }) {
+// Copies something (a transcript, a dictation), then shows a tick for a moment.
+export function CopyButton(props: { label: string; copy: () => Promise<void>; iconOnly?: boolean }) {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
-    await lechuza.copyTranscript(id);
+    await props.copy();
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
   const Icon = copied ? Check : Copy;
-  if (iconOnly) {
+  if (props.iconOnly) {
     return (
-      <button className="icon-button icon-button-small" title="Copy transcript" onClick={() => void copy()}>
+      <button className="icon-button icon-button-small" title={props.label} onClick={() => void copy()}>
         <Icon />
       </button>
     );
   }
   return (
     <button className="btn btn-secondary" onClick={() => void copy()}>
-      <Icon /> {copied ? "Copied" : "Copy transcript"}
+      <Icon /> {copied ? "Copied" : props.label}
     </button>
   );
 }

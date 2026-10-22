@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Meeting } from "@lechuza/contracts";
+import type { Dictation, Meeting } from "@lechuza/contracts";
 
-import { groupByDay, meetingStats } from "./activity.ts";
+import { groupByDay, meetingStats, mergeActivity } from "./activity.ts";
 
 // Thursday 22 October 2026, 15:00 local time.
 const now = new Date(2026, 9, 22, 15, 0);
@@ -44,5 +44,22 @@ describe("groupByDay", () => {
 describe("meetingStats", () => {
   test("counts meetings, recorded time and meetings since Monday", () => {
     expect(meetingStats(meetings, now)).toEqual({ count: 5, recordedMs: 170 * 60_000, thisWeek: 4 });
+  });
+});
+
+describe("mergeActivity", () => {
+  test("puts meetings and dictations in one list, newest first", () => {
+    const dictation = (id: string, startedAt: Date): Dictation => ({
+      id,
+      text: id,
+      startedAt: startedAt.toISOString(),
+      durationMs: 2_000,
+    });
+    const merged = mergeActivity(meetings.slice(0, 2), [
+      dictation("note", new Date(2026, 9, 22, 10, 0)),
+      dictation("early note", new Date(2026, 9, 21, 8, 0)),
+    ]);
+    expect(merged.map((activity) => activity.item.id)).toEqual(["note", "standup", "review", "early note"]);
+    expect(merged.map((activity) => activity.kind)).toEqual(["dictation", "meeting", "meeting", "dictation"]);
   });
 });

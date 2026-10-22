@@ -1,4 +1,4 @@
-import type { Meeting } from "@lechuza/contracts";
+import type { Dictation, Meeting } from "@lechuza/contracts";
 
 // Grouping and totals for Home and the Meetings list. `now` is passed in so
 // the day boundaries are testable; dates are in the Mac's time zone.
@@ -30,6 +30,20 @@ export function groupByDay<T>(items: ReadonlyArray<T>, startedAt: (item: T) => s
     else groups.push({ day, items: [item] });
   }
   return groups.map((group) => ({ label: dayLabel(group.day, now), items: group.items }));
+}
+
+// One row of Home's activity.
+export type Activity =
+  | { readonly kind: "meeting"; readonly item: Meeting }
+  | { readonly kind: "dictation"; readonly item: Dictation };
+
+// Meetings and dictations in one list, newest first.
+export function mergeActivity(meetings: ReadonlyArray<Meeting>, dictations: ReadonlyArray<Dictation>): Activity[] {
+  const activity: Activity[] = [
+    ...meetings.map((item) => ({ kind: "meeting" as const, item })),
+    ...dictations.map((item) => ({ kind: "dictation" as const, item })),
+  ];
+  return activity.sort((a, b) => Date.parse(b.item.startedAt) - Date.parse(a.item.startedAt));
 }
 
 export interface MeetingStats {

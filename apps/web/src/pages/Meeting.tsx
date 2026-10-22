@@ -5,7 +5,7 @@ import { formatClock, type AppState, type Meeting as MeetingData, type Transcrip
 
 import { lechuza, useLevels, useTranscript } from "../bridge";
 import { activeLineIndex } from "../lib/transcript";
-import { CopyTranscriptButton, Duration, RecordButton, StateBadge, formatDay, formatTime } from "../ui";
+import { CopyButton, Duration, RecordButton, StateBadge, formatDay, formatTime } from "../ui";
 
 // One meeting: its player and transcript. The line being spoken lights up;
 // a click on a line plays from there.
@@ -147,7 +147,7 @@ function MeetingActions(props: { meeting: MeetingData; hasTranscript: boolean; o
       <button className="icon-button" title="Delete" disabled={busy} onClick={() => setConfirming(true)}>
         <Trash2 />
       </button>
-      {props.hasTranscript && <CopyTranscriptButton id={meeting.id} />}
+      {props.hasTranscript && <CopyButton label="Copy transcript" copy={() => lechuza.copyTranscript(meeting.id)} />}
     </div>
   );
 }

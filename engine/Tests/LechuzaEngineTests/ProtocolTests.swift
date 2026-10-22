@@ -43,8 +43,8 @@ final class ProtocolTests: XCTestCase {
     func testUnknownCommandIsReportedAsAnError() async throws {
         let events = EventLog()
         let engine = await Engine(emit: events.append)
-        await engine.handle(line: #"{"type":"dictation.start"}"#)
-        XCTAssertEqual(events.all, [.error(message: #"unreadable command: {"type":"dictation.start"}"#)])
+        await engine.handle(line: #"{"type":"meeting.pause"}"#)
+        XCTAssertEqual(events.all, [.error(message: #"unreadable command: {"type":"meeting.pause"}"#)])
     }
 }
 
