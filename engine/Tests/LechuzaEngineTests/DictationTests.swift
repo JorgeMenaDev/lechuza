@@ -34,8 +34,9 @@ final class FakeSpeech: DictationSpeech {
 
     func warmUp() async throws {}
 
+    /// The next text, or silence once they run out.
     func transcribe(_ recording: DictationCapture.Recording) async throws -> String {
-        texts.withLock { $0.removeFirst() }
+        texts.withLock { $0.isEmpty ? "" : $0.removeFirst() }
     }
 }
 
@@ -83,7 +84,7 @@ final class DictationTests: XCTestCase {
                     return true
                 },
                 pasteboard: pasteboard),
-            readTimeout: .milliseconds(50))
+            holdFor: .milliseconds(50))
         return Dictation(
             emit: { [events] in events!.append($0) },
             speech: FakeSpeech(texts),
@@ -111,8 +112,10 @@ final class DictationTests: XCTestCase {
         XCTAssertEqual(events.saved, ["See you at three."])
     }
 
+    /// The thrown-away recording never reaches speech recognition, so the
+    /// only text heard goes to the dictation that was kept.
     func testEscWhileTranscribingPastesNothing() async {
-        let dictation = dictation(hearing: ["Thrown away.", "Kept."])
+        let dictation = dictation(hearing: ["Kept."])
         dictation.handle(.press, at: 0)
         dictation.handle(.release, at: 1)
         dictation.handle(.escape, at: 1.05)

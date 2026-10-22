@@ -142,7 +142,7 @@ A dictation, step by step:
 
 1. Main sends `dictation.configure` with your key. The engine watches the keyboard through an event tap (this needs Accessibility) and keeps Parakeet loaded.
 2. On a press, the engine opens its own microphone capture, separate from any meeting, and streams `dictation.level` to the Flow bar.
-3. On release (or the hands-free stop) it notes the app in front, boosts quiet audio and transcribes it. If that app is still in front, it pastes the text with ⌘V and restores the clipboard once the app has read it.
+3. On release (or the hands-free stop) it notes the app in front, boosts quiet audio and transcribes it. If that app is still in front, it pastes the text with ⌘V and puts your clipboard back 2 seconds later.
 4. It sends `dictation.done`. Main saves it to the history and broadcasts the new state.
 
 ## Credits

@@ -23,7 +23,7 @@ final class KeyTap: @unchecked Sendable {
 
     /// Nil when macOS refuses the tap: Accessibility isn't granted.
     init?(hotkey: Hotkey, onInput: @escaping @Sendable (HotkeyGesture.Input, TimeInterval) -> Void) {
-        self.filter = KeyFilter(hotkey: hotkey)
+        self.filter = KeyFilter(hotkey: hotkey) { CGEventSource.keyState(.combinedSessionState, key: CGKeyCode($0)) }
         self.onInput = onInput
         let events: [CGEventType] = [.flagsChanged, .keyDown, .keyUp]
         guard
@@ -89,7 +89,8 @@ final class KeyTap: @unchecked Sendable {
 /// The key tap's decisions, as a pure value the tests drive without a
 /// keyboard: which events are the hotkey's presses and releases, Esc or
 /// another key, and which to swallow. Esc is swallowed, with its key-up,
-/// while it belongs to Lechuza.
+/// while it belongs to Lechuza. A hotkey pressed while another key is held
+/// (→ then fn) is a shortcut: neither its press nor its release counts.
 struct KeyFilter {
     enum Event: Equatable {
         case flagsChanged(keyCode: Int64, flags: CGEventFlags)
@@ -102,11 +103,19 @@ struct KeyFilter {
     private static let escape: Int64 = 53
 
     let hotkey: Hotkey
+    /// Asks macOS whether a key is down now: secure input hides key-ups from
+    /// the tap, so `held` can list a key that is already up.
+    private let isKeyDown: (Int64) -> Bool
     private var down = false
+    /// The hotkey went down while another key was held.
+    private var chord = false
+    /// Other keys down now, as far as the tap has seen.
+    private var held: Set<Int64> = []
     private var swallowingEscape = false
 
-    init(hotkey: Hotkey) {
+    init(hotkey: Hotkey, isKeyDown: @escaping (Int64) -> Bool = { _ in true }) {
         self.hotkey = hotkey
+        self.isKeyDown = isKeyDown
     }
 
     /// The gesture input `event` makes, if any, and whether to drop it.
@@ -116,21 +125,27 @@ struct KeyFilter {
         case .flagsChanged(let keyCode, let flags):
             guard let isDown = hotkey.isDown(keyCode: keyCode, flags: flags), isDown != down else { return (nil, false) }
             down = isDown
-            return (isDown ? .press : .release, false)
+            if isDown {
+                held = held.filter(isKeyDown)
+                chord = !held.isEmpty
+            }
+            return (chord ? nil : isDown ? .press : .release, false)
         case .keyDown(Self.escape, _):
             guard escapeIsOurs else { return (nil, false) }
             swallowingEscape = true
             return (.escape, true)
-        case .keyDown(_, let isRepeat):
+        case .keyDown(let keyCode, let isRepeat):
+            held.insert(keyCode)
             return (isRepeat ? nil : .otherKey, false)
         case .keyUp(Self.escape) where swallowingEscape:
             swallowingEscape = false
             return (nil, true)
-        case .keyUp:
+        case .keyUp(let keyCode):
+            held.remove(keyCode)
             return (nil, false)
         case .tapDisabled:
             // A release may be among the missing events: start over with the key up.
-            self = KeyFilter(hotkey: hotkey)
+            self = KeyFilter(hotkey: hotkey, isKeyDown: isKeyDown)
             return (.interrupted, false)
         }
     }

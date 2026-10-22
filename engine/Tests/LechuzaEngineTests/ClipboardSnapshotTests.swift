@@ -17,15 +17,11 @@ final class ClipboardSnapshotTests: XCTestCase {
         pasteboard.releaseGlobally()
     }
 
-    func testPromisesTheTextForClipboardManagersToSkipAndHearsTheRead() async {
+    func testPutsTheTextOnTheClipboardForClipboardManagersToSkip() {
         pasteboard.clearContents()
-        let snapshot = ClipboardSnapshot(promising: "Hola", on: pasteboard)
-        XCTAssertNotNil(pasteboard.data(forType: ClipboardSnapshot.transient))
-        let unread = await snapshot.waitForRead(timeout: .milliseconds(50))
-        XCTAssertFalse(unread)
+        _ = ClipboardSnapshot(replacingWith: "Hola", on: pasteboard)
         XCTAssertEqual(pasteboard.string(forType: .string), "Hola")
-        let read = await snapshot.waitForRead(timeout: .milliseconds(50))
-        XCTAssertTrue(read)
+        XCTAssertNotNil(pasteboard.data(forType: ClipboardSnapshot.transient))
     }
 
     func testRestoresEveryItemAndType() {
@@ -37,7 +33,7 @@ final class ClipboardSnapshotTests: XCTestCase {
         pasteboard.clearContents()
         pasteboard.writeObjects([first, second])
 
-        let snapshot = ClipboardSnapshot(promising: "dictated", on: pasteboard)
+        let snapshot = ClipboardSnapshot(replacingWith: "dictated", on: pasteboard)
         XCTAssertTrue(snapshot.restore())
 
         let items = pasteboard.pasteboardItems ?? []
@@ -50,7 +46,7 @@ final class ClipboardSnapshotTests: XCTestCase {
 
     func testRestoresAnEmptyClipboard() {
         pasteboard.clearContents()
-        let snapshot = ClipboardSnapshot(promising: "dictated", on: pasteboard)
+        let snapshot = ClipboardSnapshot(replacingWith: "dictated", on: pasteboard)
         XCTAssertTrue(snapshot.restore())
         XCTAssertEqual(pasteboard.pasteboardItems?.count ?? 0, 0)
     }
@@ -58,7 +54,7 @@ final class ClipboardSnapshotTests: XCTestCase {
     func testKeepsWhatTheUserCopiedMeanwhile() {
         pasteboard.clearContents()
         pasteboard.setString("before", forType: .string)
-        let snapshot = ClipboardSnapshot(promising: "dictated", on: pasteboard)
+        let snapshot = ClipboardSnapshot(replacingWith: "dictated", on: pasteboard)
         pasteboard.clearContents()
         pasteboard.setString("copied since", forType: .string)
         XCTAssertFalse(snapshot.restore())

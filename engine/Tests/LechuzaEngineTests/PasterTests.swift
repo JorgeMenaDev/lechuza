@@ -4,8 +4,8 @@ import XCTest
 @testable import LechuzaEngine
 
 /// Pasting a dictation: only with Accessibility, only into the app that had
-/// focus when it stopped, and with the clipboard put back once that app has
-/// read the words. A private pasteboard stands in for the clipboard.
+/// focus when it stopped, and with the clipboard put back once the words
+/// have had time to land. A private pasteboard stands in for the clipboard.
 @MainActor
 final class PasterTests: XCTestCase {
     private var pasteboard: NSPasteboard!
@@ -26,7 +26,7 @@ final class PasterTests: XCTestCase {
         pasteboard.releaseGlobally()
     }
 
-    private func paster(readTimeout: Duration = .seconds(5)) -> Paster {
+    private func paster(holdFor: Duration = .milliseconds(300)) -> Paster {
         Paster(
             system: Paster.System(
                 trusted: { [unowned self] in trusted },
@@ -37,32 +37,47 @@ final class PasterTests: XCTestCase {
                     return keystrokeWorks
                 },
                 pasteboard: pasteboard),
-            readTimeout: readTimeout)
+            holdFor: holdFor)
     }
 
-    func testASlowAppStillPastesTheWordsThenTheClipboardComesBack() async {
+    /// Waits until the clipboard holds `text`, or gives up after 3 s.
+    private func clipboard(becomes text: String) async -> Bool {
+        let deadline = ContinuousClock.now + .seconds(3)
+        while pasteboard.string(forType: .string) != text, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return pasteboard.string(forType: .string) == text
+    }
+
+    /// A clipboard manager reads every change at once; the app that got the
+    /// ⌘V reads later. The words must still be there for the app.
+    func testAClipboardManagerReadingFirstDoesNotTakeTheWordsFromASlowApp() async {
         var pasted: String?
         let read = expectation(description: "the app read the clipboard")
         app = { [pasteboard] in
-            // The app gets to the ⌘V after 700 ms, later than the old fixed restore.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { _ = pasteboard?.string(forType: .string) }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                 pasted = pasteboard?.string(forType: .string)
                 read.fulfill()
             }
         }
-        let paster = paster()
+        let paster = paster(holdFor: .seconds(1))
         XCTAssertEqual(paster.paste("dictated words", into: 100), .pasted)
-        await paster.restoreClipboard()
         await fulfillment(of: [read])
         XCTAssertEqual(pasted, "dictated words")
-        XCTAssertEqual(pasteboard.string(forType: .string), "copied before")
+        let restored = await clipboard(becomes: "copied before")
+        XCTAssertTrue(restored)
     }
 
-    func testAnAppThatNeverReadsGetsTheClipboardBackAfterTheTimeout() async {
-        let paster = paster(readTimeout: .milliseconds(100))
-        XCTAssertEqual(paster.paste("dictated words", into: 100), .pasted)
-        await paster.restoreClipboard()
-        XCTAssertEqual(pasteboard.string(forType: .string), "copied before")
+    /// The next dictation can paste before the last one's hold ends: it must
+    /// save the user's clipboard, never the last dictation's words.
+    func testBackToBackPastesGiveBackTheUsersClipboard() async {
+        let paster = paster()
+        XCTAssertEqual(paster.paste("first", into: 100), .pasted)
+        XCTAssertEqual(paster.paste("second", into: 100), .pasted)
+        XCTAssertEqual(pasteboard.string(forType: .string), "second")
+        let restored = await clipboard(becomes: "copied before")
+        XCTAssertTrue(restored)
     }
 
     func testWithoutAccessibilityTheClipboardIsNeverTouched() async {
@@ -70,7 +85,6 @@ final class PasterTests: XCTestCase {
         let before = pasteboard.changeCount
         let paster = paster()
         XCTAssertEqual(paster.paste("dictated words", into: 100), .noAccessibility)
-        await paster.restoreClipboard()
         XCTAssertEqual(keystrokes, 0)
         XCTAssertEqual(pasteboard.changeCount, before)
         XCTAssertEqual(pasteboard.string(forType: .string), "copied before")

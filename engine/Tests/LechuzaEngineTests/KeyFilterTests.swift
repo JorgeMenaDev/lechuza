@@ -43,4 +43,20 @@ final class KeyFilterTests: XCTestCase {
         XCTAssertFalse(arrow.swallow)
         XCTAssertNil(filter.handle(.keyDown(keyCode: 124, isRepeat: true), escapeIsOurs: true).input)
     }
+
+    /// → held, then the hotkey: a shortcut, so neither its press nor its
+    /// release reaches the gesture (in hands-free, that release would stop it).
+    func testAHotkeyPressedWhileAnotherKeyIsHeldIsAShortcut() {
+        let arrowDown = KeyFilter.Event.keyDown(keyCode: 124, isRepeat: false)
+        let arrowRepeat = KeyFilter.Event.keyDown(keyCode: 124, isRepeat: true)
+        XCTAssertEqual(inputs([arrowDown, optionDown, arrowRepeat, optionUp]), [.otherKey, nil, nil, nil])
+        XCTAssertEqual(inputs([.keyUp(keyCode: 124), optionDown]), [nil, .press], "once → is up, the hotkey counts")
+    }
+
+    /// Secure input hides key-ups from the tap: a key Lechuza still thinks is
+    /// held must not block the hotkey once macOS says it is up.
+    func testAKeyWhoseReleaseWentMissingDoesNotBlockTheHotkey() {
+        filter = KeyFilter(hotkey: .rightOption, isKeyDown: { _ in false })
+        XCTAssertEqual(inputs([.keyDown(keyCode: 124, isRepeat: false), optionDown]), [.otherKey, .press])
+    }
 }

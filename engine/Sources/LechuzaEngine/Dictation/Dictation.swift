@@ -164,6 +164,8 @@ final class Dictation {
     }
 
     private func transcribe(_ recording: DictationCapture.Recording, _ dictated: Dictated) async {
+        // Esc threw it away while it waited its turn: don't spend the model on it.
+        guard dictated.generation == generation else { return }
         let text: String
         do {
             text = try await speech.transcribe(recording)
@@ -178,8 +180,6 @@ final class Dictation {
                 text: text, startedAt: ISO8601DateFormatter().string(from: dictated.startedAt),
                 durationMs: dictated.spokenMs))
         finished(dictated, failure: outcome.problem)
-        // The next dictation waits too, so it never saves these words as the clipboard.
-        await paster.restoreClipboard()
     }
 
     /// A dictation is done with, unless Esc threw it away first.

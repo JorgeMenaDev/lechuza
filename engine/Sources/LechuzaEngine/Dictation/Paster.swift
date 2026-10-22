@@ -1,9 +1,11 @@
 import AppKit
 
 /// Types a dictation into the app that had focus when it stopped: puts the
-/// words on the clipboard, presses ⌘V, and puts the clipboard back once
-/// that app has read them. It touches the clipboard only when it can press
-/// the keys and the app is still in front.
+/// words on the clipboard, presses ⌘V, and puts the clipboard back after a
+/// hold long enough for a busy app to read them. Nothing on the Mac says
+/// which app read the clipboard (a clipboard manager reads every change at
+/// once), so the hold is a fixed time. It touches the clipboard only when
+/// it can press the keys and the app is still in front.
 @MainActor
 final class Paster {
     enum Outcome: Equatable {
@@ -33,15 +35,15 @@ final class Paster {
     }
 
     private let system: System
-    /// How long an app gets to read the words before the clipboard comes
-    /// back anyway: one busy enough to take this long is rare.
-    private let readTimeout: Duration
+    /// How long the words stay on the clipboard: an app busy enough to take
+    /// longer to handle ⌘V is rare.
+    private let holdFor: Duration
     /// The clipboard as it was before the latest paste, until it is put back.
     private var swapped: ClipboardSnapshot?
 
-    init(system: System = .mac, readTimeout: Duration = .seconds(5)) {
+    init(system: System = .mac, holdFor: Duration = .seconds(2)) {
         self.system = system
-        self.readTimeout = readTimeout
+        self.holdFor = holdFor
     }
 
     /// The app in front now: where a dictation that stops now goes.
@@ -49,29 +51,26 @@ final class Paster {
         system.frontmostApp()
     }
 
-    /// Pastes `text` into `target`. Call `restoreClipboard()` before the
-    /// next paste.
+    /// Pastes `text` into `target`; the clipboard comes back on its own.
     func paste(_ text: String, into target: pid_t?) -> Outcome {
         guard system.trusted() else { return .noAccessibility }
         guard system.frontmostApp() == target else { return .appChanged }
-        let clipboard = ClipboardSnapshot(promising: text, on: system.pasteboard)
+        // A paste still in its hold gives the clipboard back first, so this
+        // one saves the user's clipboard, not the last dictation.
+        swapped?.restore()
+        let clipboard = ClipboardSnapshot(replacingWith: text, on: system.pasteboard)
         guard system.pressCommandV() else {
             clipboard.restore()
+            swapped = nil
             return .failed
         }
         swapped = clipboard
-        return .pasted
-    }
-
-    /// Puts back what the clipboard held before the latest paste, once the
-    /// app has read the words, or after `readTimeout`.
-    func restoreClipboard() async {
-        guard let clipboard = swapped else { return }
-        swapped = nil
-        if await clipboard.waitForRead(timeout: readTimeout) {
-            // One paste can read the clipboard more than once.
-            try? await Task.sleep(for: .milliseconds(200))
+        Task { [weak self, holdFor] in
+            try? await Task.sleep(for: holdFor)
+            guard let self, swapped === clipboard else { return }
+            clipboard.restore()
+            swapped = nil
         }
-        clipboard.restore()
+        return .pasted
     }
 }
