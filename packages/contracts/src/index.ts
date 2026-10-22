@@ -43,7 +43,8 @@ export type ModelStatus =
   | { readonly state: "ready" }
   | { readonly state: "failed"; readonly message: string };
 
-export interface AppState {
+// The meeting side of AppState, owned by `Meetings` in main.
+export interface MeetingsState {
   readonly phase: RecorderPhase;
   // The meeting being recorded, with its start in epoch milliseconds.
   readonly recording: { readonly id: string; readonly startedAt: number } | null;
@@ -53,6 +54,36 @@ export interface AppState {
   // Newest first.
   readonly meetings: ReadonlyArray<Meeting>;
 }
+
+// "system" follows the macOS appearance.
+export type Theme = "system" | "light" | "dark";
+
+// What the user chose in Settings, saved in the app's data folder.
+export interface Settings {
+  readonly theme: Theme;
+}
+
+// Facts about the app and this Mac that don't change while it runs.
+export interface AppInfo {
+  readonly version: string;
+  // Where meetings are saved.
+  readonly meetingsDir: string;
+  // The Mac user's first name for the greeting, or null when unknown.
+  readonly firstName: string | null;
+}
+
+export interface AppState extends MeetingsState {
+  readonly settings: Settings;
+  readonly info: AppInfo;
+}
+
+// Pages outside the app that Settings links to.
+export type ExternalPage =
+  | "repository"
+  | "sound-settings"
+  | "privacy-microphone"
+  | "privacy-system-audio"
+  | "privacy-documents";
 
 // Peak levels (0–1) while recording, sent apart from the state ten times a second.
 export interface Levels {
@@ -79,6 +110,9 @@ export interface LechuzaBridge {
   revealMeeting(id: string): Promise<void>;
   retryTranscription(id: string): Promise<void>;
   dismissNotice(): Promise<void>;
+  setTheme(theme: Theme): Promise<void>;
+  revealMeetingsFolder(): Promise<void>;
+  openExternal(page: ExternalPage): Promise<void>;
 }
 
 export const IPC = {
@@ -94,13 +128,16 @@ export const IPC = {
   revealMeeting: "lechuza:reveal-meeting",
   retryTranscription: "lechuza:retry-transcription",
   dismissNotice: "lechuza:dismiss-notice",
+  setTheme: "lechuza:set-theme",
+  revealMeetingsFolder: "lechuza:reveal-meetings-folder",
+  openExternal: "lechuza:open-external",
 } as const;
 
 // lechuza-media://meeting/<id> serves that meeting's mix, with byte ranges.
 export const MEDIA_SCHEME = "lechuza-media";
 
 // Every window loads the same bundle; `#/<surface>` picks the screen.
-export type Surface = "meetings";
+export type Surface = "main";
 
 // "1:05", or "1:02:05" past the hour.
 export function formatClock(ms: number): string {
