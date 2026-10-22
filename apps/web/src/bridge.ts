@@ -1,6 +1,14 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-import type { AppState, LechuzaBridge, Levels, Meeting, TranscriptLine } from "@lechuza/contracts";
+import type {
+  AppState,
+  Dictation,
+  DictationState,
+  LechuzaBridge,
+  Levels,
+  Meeting,
+  TranscriptLine,
+} from "@lechuza/contracts";
 
 declare global {
   interface Window {
@@ -61,6 +69,23 @@ export function useTranscript(meeting: Meeting): ReadonlyArray<TranscriptLine> {
     };
   }, [meeting.id, ready]);
   return lines;
+}
+
+// The newest `count` dictations: the ones DictationState carries, or more
+// read through main, again whenever a new dictation lands.
+export function useDictations(dictation: DictationState, count: number): ReadonlyArray<Dictation> {
+  const [read, setRead] = useState<ReadonlyArray<Dictation> | null>(null);
+  const more = count > dictation.recent.length && dictation.stats.count > dictation.recent.length;
+  const newest = dictation.recent[0]?.id;
+  useEffect(() => {
+    if (!more) return;
+    let active = true;
+    void lechuza.getDictations(count).then((loaded) => active && setRead(loaded));
+    return () => {
+      active = false;
+    };
+  }, [more, count, newest]);
+  return more && read ? read : dictation.recent;
 }
 
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");

@@ -77,6 +77,8 @@ export interface Dictation {
 }
 
 export interface DictationStats {
+  // Dictations in the history.
+  readonly count: number;
   readonly words: number;
   // Words per minute of speaking, or 0 before the first dictation.
   readonly wordsPerMinute: number;
@@ -157,6 +159,9 @@ export interface LechuzaBridge {
   startDictation(): Promise<void>;
   stopDictation(): Promise<void>;
   copyDictation(id: string): Promise<void>;
+  // The newest `count` dictations, newest first, read from the history:
+  // Home's "Show more" past the hundred that DictationState carries.
+  getDictations(count: number): Promise<ReadonlyArray<Dictation>>;
   // Shows macOS's Accessibility prompt for Lechuza.
   requestAccessibility(): Promise<void>;
   // The pointer is over the Flow bar's pill: it takes clicks until it leaves.
@@ -185,6 +190,7 @@ export const IPC = {
   startDictation: "lechuza:start-dictation",
   stopDictation: "lechuza:stop-dictation",
   copyDictation: "lechuza:copy-dictation",
+  getDictations: "lechuza:get-dictations",
   requestAccessibility: "lechuza:request-accessibility",
   setFlowBarHover: "lechuza:set-flow-bar-hover",
   revealMeetingsFolder: "lechuza:reveal-meetings-folder",

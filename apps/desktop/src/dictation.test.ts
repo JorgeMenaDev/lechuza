@@ -51,9 +51,9 @@ describe("Dictations", () => {
     });
     const state = dictations.state();
     expect(state.recent.map((item) => item.text)).toEqual(["See you at three."]);
-    expect(state.stats).toEqual({ words: 4, wordsPerMinute: 160 });
+    expect(state.stats).toEqual({ count: 1, words: 4, wordsPerMinute: 160 });
     const saved = await DictationHistory.load(path.join(dir, "dictations.jsonl"));
-    expect(saved.recent(1)[0]?.text).toBe("See you at three.");
+    expect(saved.recent()[0]?.text).toBe("See you at three.");
   });
 
   test("shows a failure on the Flow bar until the next dictation starts", async () => {

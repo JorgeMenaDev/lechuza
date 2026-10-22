@@ -19,8 +19,6 @@ export interface MacFacts {
 
 // How long a failure stays on the Flow bar.
 const ERROR_MS = 4_000;
-// How many dictations AppState carries.
-const RECENT = 100;
 
 // Dictation's side of AppState. The engine owns the hotkey, the microphone
 // and the paste; this mirrors its phase, keeps the history, and holds the
@@ -44,7 +42,7 @@ export class Dictations {
       error: this.error,
       accessibility: this.mac.accessibility,
       fnConflict: this.hotkey === "fn" && !this.mac.globeDoesNothing,
-      recent: this.history.recent(RECENT),
+      recent: this.history.recent(),
       stats: this.history.stats(),
     };
   }

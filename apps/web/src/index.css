@@ -661,6 +661,12 @@ svg.lucide-circle-dot circle:first-child {
   opacity: 1;
 }
 
+/* Home's "Show more", under the oldest day shown. */
+.show-more {
+  display: flex;
+  margin: 24px auto 0;
+}
+
 /* Meetings: the list beside a 280 pt preview pane. */
 
 .split {

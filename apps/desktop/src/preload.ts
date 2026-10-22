@@ -28,6 +28,7 @@ const bridge: LechuzaBridge = {
   startDictation: () => ipcRenderer.invoke(IPC.startDictation),
   stopDictation: () => ipcRenderer.invoke(IPC.stopDictation),
   copyDictation: (id) => ipcRenderer.invoke(IPC.copyDictation, id),
+  getDictations: (count) => ipcRenderer.invoke(IPC.getDictations, count),
   requestAccessibility: () => ipcRenderer.invoke(IPC.requestAccessibility),
   setFlowBarHover: (hover) => ipcRenderer.invoke(IPC.setFlowBarHover, hover),
   revealMeetingsFolder: () => ipcRenderer.invoke(IPC.revealMeetingsFolder),

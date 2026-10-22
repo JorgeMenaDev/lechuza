@@ -33,8 +33,16 @@ export async function loadSettings(file: string): Promise<Settings> {
   }
 }
 
+// The save in progress. Saves run one at a time in call order, so two quick
+// changes never share the temp file and the later one wins.
+let saving: Promise<void> = Promise.resolve();
+
 // Writes through a temp file, so a failed write leaves the old settings whole.
-export async function saveSettings(file: string, settings: Settings): Promise<void> {
-  await fs.writeFile(`${file}.part`, `${JSON.stringify(settings, null, 2)}\n`);
-  await fs.rename(`${file}.part`, file);
+export function saveSettings(file: string, settings: Settings): Promise<void> {
+  const save = saving.then(async () => {
+    await fs.writeFile(`${file}.part`, `${JSON.stringify(settings, null, 2)}\n`);
+    await fs.rename(`${file}.part`, file);
+  });
+  saving = save.catch(() => {});
+  return save;
 }

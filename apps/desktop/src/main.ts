@@ -126,10 +126,11 @@ function globeDoesNothing(): Promise<boolean> {
   );
 }
 
-// The settings, applied: the theme drives prefers-color-scheme in every window.
+// The settings, applied: the theme drives prefers-color-scheme in every
+// window, and the main window's background. The Flow bar stays transparent.
 function applySettings(settings: Settings): void {
   nativeTheme.themeSource = settings.theme;
-  for (const win of BrowserWindow.getAllWindows()) win.setBackgroundColor(windowBackground());
+  mainWindow?.setBackgroundColor(windowBackground());
 }
 
 // The settings in use and the file they're saved to.
@@ -194,10 +195,13 @@ function registerIpc(
   });
   ipcMain.handle(IPC.startDictation, () => dictations.start());
   ipcMain.handle(IPC.stopDictation, () => dictations.stop());
-  ipcMain.handle(IPC.copyDictation, (_event, id: unknown) => {
-    const dictation = dictations.history.find(text(id));
+  ipcMain.handle(IPC.copyDictation, async (_event, id: unknown) => {
+    const dictation = await dictations.history.find(text(id));
     if (dictation) clipboard.writeText(dictation.text);
   });
+  ipcMain.handle(IPC.getDictations, (_event, count: unknown) =>
+    dictations.history.newest(typeof count === "number" && Number.isInteger(count) && count > 0 ? count : 0),
+  );
   ipcMain.handle(IPC.requestAccessibility, () => {
     systemPreferences.isTrustedAccessibilityClient(true);
   });

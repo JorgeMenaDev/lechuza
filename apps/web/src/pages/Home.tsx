@@ -1,20 +1,24 @@
 import { AudioLines, Check } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type { AppState, Dictation, DictationState, DictationStats, Hotkey, Meeting } from "@lechuza/contracts";
 
-import { lechuza } from "../bridge";
+import { lechuza, useDictations } from "../bridge";
 import { groupByDay, meetingStats, mergeActivity } from "../lib/activity";
 import { CopyButton, Duration, EmptyState, HOTKEY_NAMES, StateBadge, formatTime } from "../ui";
 
-// Home: a greeting, the dictation setup until it is done, recent meetings and
-// dictations by day, and totals.
+// Home: a greeting, the dictation setup until it is done, meetings and
+// dictations by day, newest first, and totals.
 
-const RECENT = 100;
+// Rows shown at first, and added by each "Show more".
+const PAGE = 100;
 
 export function Home({ state, onOpenMeeting }: { state: AppState; onOpenMeeting: (id: string) => void }) {
   const name = state.info.firstName;
-  const recent = mergeActivity(state.meetings, state.dictation.recent).slice(0, RECENT);
+  const [limit, setLimit] = useState(PAGE);
+  const dictations = useDictations(state.dictation, limit);
+  const recent = mergeActivity(state.meetings, dictations).slice(0, limit);
+  const more = state.meetings.length + state.dictation.stats.count > limit;
   const recordingStartedAt = state.recording?.startedAt ?? null;
   const key = HOTKEY_NAMES[state.settings.hotkey].key;
   return (
@@ -47,6 +51,11 @@ export function Home({ state, onOpenMeeting }: { state: AppState; onOpenMeeting:
                 </ul>
               </section>
             ))
+          )}
+          {more && (
+            <button className="btn btn-secondary show-more" onClick={() => setLimit(limit + PAGE)}>
+              Show more
+            </button>
           )}
         </section>
         <Stats meetings={state.meetings} dictation={state.dictation.stats} />

@@ -27,13 +27,13 @@ Put the cursor in any text field, in any app, and dictate:
 
 - **Hold** the key, speak, and let go.
 - **Double-press** it to talk hands-free, then press it once more (or click ■ on the Flow bar) to stop.
-- **Esc** throws the dictation away.
+- **Esc** throws the dictation away, while you talk or while it's being transcribed.
 
-Your words are pasted where the cursor is, about a second after you stop. Lechuza puts them on the clipboard, presses ⌘V for you, then puts back what the clipboard held before. It boosts quiet input, so a whisper transcribes like normal speech.
+Your words are pasted where the cursor is, about a second after you stop. Lechuza puts them on the clipboard, presses ⌘V for you, and once the app has taken them puts back what the clipboard held before. If you switch to another app before they're ready, Lechuza doesn't paste them: they wait on Home. It boosts quiet input, so a whisper transcribes like normal speech.
 
 The **Flow bar** is a small pill at the bottom of the screen, on every Space and over full-screen apps. It never takes focus from the app you're typing in. Point at it and click to start dictating. While you talk it shows a live waveform, then dots while Parakeet transcribes. A red edge means something went wrong; point at it to read what. A short sound plays when dictation starts and stops (turn it off in Settings).
 
-Home lists every dictation next to your meetings, with a button to copy it, and adds up the words you've dictated and your words per minute. They are kept in `dictations.jsonl` in Lechuza's data folder (`~/Library/Application Support/Lechuza`).
+Home lists every dictation next to your meetings, newest first, with a button to copy it (**Show more** reaches older ones), and adds up the words you've dictated and your words per minute. They are kept in `dictations.jsonl` in Lechuza's data folder (`~/Library/Application Support/Lechuza`).
 
 ## Meetings
 
@@ -142,7 +142,7 @@ A dictation, step by step:
 
 1. Main sends `dictation.configure` with your key. The engine watches the keyboard through an event tap (this needs Accessibility) and keeps Parakeet loaded.
 2. On a press, the engine opens its own microphone capture, separate from any meeting, and streams `dictation.level` to the Flow bar.
-3. On release (or the hands-free stop) it boosts quiet audio, transcribes it, pastes the text with ⌘V and restores the clipboard.
+3. On release (or the hands-free stop) it notes the app in front, boosts quiet audio and transcribes it. If that app is still in front, it pastes the text with ⌘V and restores the clipboard once the app has read it.
 4. It sends `dictation.done`. Main saves it to the history and broadcasts the new state.
 
 ## Credits

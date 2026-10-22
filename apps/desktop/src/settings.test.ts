@@ -40,4 +40,13 @@ describe("settings", () => {
     await saveSettings(file, { theme: "light", hotkey: "controlOption", sounds: false });
     expect(await loadSettings(file)).toEqual({ theme: "light", hotkey: "controlOption", sounds: false });
   });
+
+  test("two quick changes both save, and the later one wins", async () => {
+    const file = path.join(dir, "settings.json");
+    await Promise.all([
+      saveSettings(file, { ...DEFAULTS, theme: "dark" }),
+      saveSettings(file, { ...DEFAULTS, theme: "dark", sounds: false }),
+    ]);
+    expect(await loadSettings(file)).toEqual({ ...DEFAULTS, theme: "dark", sounds: false });
+  });
 });

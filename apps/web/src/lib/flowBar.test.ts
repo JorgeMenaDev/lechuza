@@ -10,7 +10,7 @@ const idle: DictationState = {
   accessibility: true,
   fnConflict: false,
   recent: [],
-  stats: { words: 0, wordsPerMinute: 0 },
+  stats: { count: 0, words: 0, wordsPerMinute: 0 },
 };
 
 describe("flowBarView", () => {
