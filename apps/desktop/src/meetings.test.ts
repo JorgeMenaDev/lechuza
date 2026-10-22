@@ -101,6 +101,20 @@ describe("Meetings", () => {
     expect(sent).toEqual([{ type: "meeting.start", root }]);
   });
 
+  test("the launch scan waits for a starting meeting to name its folder", async () => {
+    await fs.mkdir(dir("2026-10-22-1405"));
+    await fs.writeFile(path.join(dir("2026-10-22-1405"), "recording.json"), "{}");
+    meetings.start();
+    await meetings.handle({ type: "ready", modelDownloaded: true });
+    expect(sent).toEqual([{ type: "meeting.start", root }]);
+
+    await meetings.handle({ type: "meeting.started", dir: dir("2026-10-22-1405"), startedAt: "2026-10-22T14:05:09Z" });
+    expect(sent).toEqual([{ type: "meeting.start", root }]);
+
+    await meetings.handle({ type: "meeting.stopped", dir: dir("2026-10-22-1405"), status: "complete" });
+    expect(sent.at(-1)).toEqual({ type: "transcription.start", dir: dir("2026-10-22-1405") });
+  });
+
   test("marks the transcription failed when the engine dies on it", async () => {
     await finishedSession("2026-10-22-0900");
     await meetings.handle({ type: "meeting.stopped", dir: dir("2026-10-22-0900"), status: "complete" });

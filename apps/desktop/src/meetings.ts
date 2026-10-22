@@ -88,14 +88,14 @@ export class Meetings {
     switch (event.type) {
       case "ready":
         this.model = event.modelDownloaded ? { state: "ready" } : { state: "missing" };
-        // A meeting can start while the scan runs; its folder is no leftover.
-        for (const id of await this.library.untranscribed()) if (id !== this.#recording?.id) this.enqueue(id);
+        for (const id of await this.library.untranscribed()) this.enqueue(id);
         break;
       case "meeting.started":
         this.#phase = "recording";
         this.#recording = { id: path.basename(event.dir), startedAt: Date.parse(event.startedAt) };
         // Fetch the model during the meeting, not after it.
         if (this.model.state !== "ready") this.engine.send({ type: "model.prepare" });
+        this.next();
         break;
       case "meeting.level":
         this.listener.onLevels({ mic: event.mic, system: event.system });
@@ -111,6 +111,7 @@ export class Meetings {
       case "meeting.failed":
         if (this.#phase === "starting") this.#phase = "idle";
         this.notice = event.message;
+        this.next();
         break;
       case "model.progress":
         this.model = { state: "downloading", phase: event.phase, fraction: event.fraction };
@@ -163,12 +164,15 @@ export class Meetings {
     this.next();
   }
 
+  // Never transcribes the folder being recorded: it is queued again when the
+  // meeting stops. While a meeting starts, its folder isn't known yet (a launch
+  // scan may have queued it), so the queue waits for meeting.started or failed.
   private next(): void {
-    if (this.current) return;
+    if (this.current || this.#phase === "starting") return;
     const id = this.queue.shift();
     if (id === undefined) return;
     const dir = this.library.dir(id);
-    if (!dir) return this.next();
+    if (!dir || id === this.#recording?.id) return this.next();
     this.current = id;
     this.engine.send({ type: "transcription.start", dir });
   }

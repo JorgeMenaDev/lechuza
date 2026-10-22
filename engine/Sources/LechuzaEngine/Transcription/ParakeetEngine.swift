@@ -66,11 +66,16 @@ actor ParakeetEngine {
         // makes AVFoundation raise an ObjC exception deep inside the
         // resampler — uncatchable from Swift, so it takes the whole engine
         // down. Check readability up front instead.
-        let seconds: Double
+        let tooShort: Bool
         do {
             let probe = try AVAudioFile(forReading: audio)
             guard probe.length > 0 else { throw EngineError.unreadableAudio(audio, nil) }
-            seconds = Double(probe.length) / probe.fileFormat.sampleRate
+            tooShort = Double(probe.length) / probe.fileFormat.sampleRate < ASRConstants.minimumAudioDurationSeconds
+            // A header can claim a short length over packets that don't
+            // decode; only a clip that reads back counts as silence below.
+            if tooShort, let buffer = AVAudioPCMBuffer(pcmFormat: probe.processingFormat, frameCapacity: AVAudioFrameCount(probe.length)) {
+                try probe.read(into: buffer)
+            }
         } catch let error as EngineError {
             throw error
         } catch {
@@ -78,7 +83,7 @@ actor ParakeetEngine {
         }
         // The model rejects clips under its minimum; one that short holds no
         // speech, so it must not fail the meeting.
-        guard seconds >= ASRConstants.minimumAudioDurationSeconds else { return [] }
+        guard !tooShort else { return [] }
 
         guard let manager else { throw ASRError.notInitialized }
 
