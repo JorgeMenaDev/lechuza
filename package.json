@@ -2,6 +2,7 @@
   "name": "lechuza",
   "private": true,
   "type": "module",
+  "packageManager": "bun@1.2.21",
   "workspaces": [
     "apps/*",
     "packages/*"

@@ -74,6 +74,48 @@ final class TranscriptTests: XCTestCase {
         XCTAssertEqual(merged[2].start_ms, 25000)
     }
 
+    private func line(_ speaker: String, _ startMs: Int, _ endMs: Int, _ text: String) -> Transcript.Segment {
+        Transcript.Segment(speaker: speaker, start_ms: startMs, end_ms: endMs, text: text)
+    }
+
+    /// Lines from a live test without headphones: the mic heard each `them`
+    /// sentence through the speakers about 0.2 s later, one word misheard.
+    func testDropsMeLinesThatRepeatThemAtTheSameTime() {
+        let segments = [
+            line("them", 3471, 6751, "The quarterly budget review moves to Thursday afternoon."),
+            line("me", 3581, 6941, "The quarterly budget review moves to Thursday afternoon."),
+            line("them", 6751, 9391, "Please send the slides to Maria before lunch."),
+            line("me", 6941, 9581, "Please send us slides to Maria before lunch."),
+        ]
+        XCTAssertEqual(Transcript.removingEcho(from: segments), [segments[0], segments[2]])
+    }
+
+    /// The mic's transcript can break sentences differently from theirs.
+    func testDropsAnEchoThatSpansTwoOfTheirLines() {
+        let segments = [
+            line("them", 0, 3000, "The budget review moves to Thursday."),
+            line("them", 3000, 6000, "Please send the slides."),
+            line("me", 1500, 6200, "Moves to Thursday please send the slides."),
+        ]
+        XCTAssertEqual(Transcript.removingEcho(from: segments), Array(segments[0..<2]))
+    }
+
+    func testKeepsWhatYouSayWhileTheyTalk() {
+        let segments = [
+            line("them", 3000, 9000, "The quarterly budget review moves to Thursday afternoon."),
+            line("me", 4000, 6000, "Sorry, I can't make Thursday."),
+        ]
+        XCTAssertEqual(Transcript.removingEcho(from: segments), segments)
+    }
+
+    func testKeepsTheirWordsWhenYouRepeatThemLater() {
+        let segments = [
+            line("them", 1000, 2500, "We meet on Thursday."),
+            line("me", 4000, 5500, "We meet on Thursday."),
+        ]
+        XCTAssertEqual(Transcript.removingEcho(from: segments), segments)
+    }
+
     func testRenderedMarkdownHasTimestampedSpeakersAndCaptureStatus() {
         let transcript = Transcript(
             engine: "parakeet", model: "test", created_at: "2026-10-22T14:05:09Z",
