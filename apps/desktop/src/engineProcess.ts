@@ -5,6 +5,16 @@ import { parseEngineEvent, type EngineCommand, type EngineEvent } from "@lechuza
 
 import type { EngineLink } from "./meetings.ts";
 
+// A write after the engine closed its stdin fails with EPIPE. Unhandled,
+// that would crash main; instead the engine counts as failed: killing it
+// fires "close", which reports the exit.
+export function killOnStdinError(child: ChildProcess): void {
+  child.stdin?.on("error", (error) => {
+    console.error(`lechuza-engine stdin: ${error.message}`);
+    child.kill();
+  });
+}
+
 export interface EngineHandlers {
   onEvent(event: EngineEvent): void;
   // The engine ended without being asked to; `ran` says whether it ever got going.
@@ -40,13 +50,7 @@ export class EngineProcess implements EngineLink {
       });
     }
     child.on("error", (error) => console.error(`lechuza-engine: ${error.message}`));
-    // A write after the engine closed its stdin fails with EPIPE. Unhandled,
-    // that would crash main; instead the engine counts as failed: killing it
-    // fires "close", which reports the exit.
-    child.stdin?.on("error", (error) => {
-      console.error(`lechuza-engine stdin: ${error.message}`);
-      child.kill();
-    });
+    killOnStdinError(child);
     child.on("close", () => {
       if (this.child !== child) return;
       this.child = null;

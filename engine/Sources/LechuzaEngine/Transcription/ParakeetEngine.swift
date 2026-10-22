@@ -62,20 +62,25 @@ actor ParakeetEngine {
     /// Transcribe one audio file into sentence-sized segments. Call
     /// `prepare` first.
     func transcribe(_ audio: URL) async throws -> [TranscriptSegment] {
-        guard let manager else { throw ASRError.notInitialized }
-
         // A track with no frames (recorder died before its first buffer)
         // makes AVFoundation raise an ObjC exception deep inside the
         // resampler — uncatchable from Swift, so it takes the whole engine
         // down. Check readability up front instead.
+        let seconds: Double
         do {
             let probe = try AVAudioFile(forReading: audio)
             guard probe.length > 0 else { throw EngineError.unreadableAudio(audio, nil) }
+            seconds = Double(probe.length) / probe.fileFormat.sampleRate
         } catch let error as EngineError {
             throw error
         } catch {
             throw EngineError.unreadableAudio(audio, error)
         }
+        // The model rejects clips under its minimum; one that short holds no
+        // speech, so it must not fail the meeting.
+        guard seconds >= ASRConstants.minimumAudioDurationSeconds else { return [] }
+
+        guard let manager else { throw ASRError.notInitialized }
 
         var state = try TdtDecoderState()
         let result = try await manager.transcribe(audio, decoderState: &state)
