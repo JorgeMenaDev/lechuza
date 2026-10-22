@@ -28,7 +28,7 @@ final class HotkeyGestureTests: XCTestCase {
         XCTAssertEqual(run([(.press, 0), (.release, 0.15), (.press, 0.4), (.release, 0.5)]), [[.start], [], [], []])
         XCTAssertEqual(gesture.state, .handsFree)
         XCTAssertEqual(gesture.handle(.timeout, at: 0.65), [], "a stale timer changes nothing")
-        XCTAssertEqual(run([(.press, 6), (.release, 6.1)]), [[.commit], []])
+        XCTAssertEqual(run([(.press, 6), (.release, 6.1)]), [[], [.commit]], "the stop press counts once it comes up")
         XCTAssertEqual(gesture.state, .idle)
     }
 
@@ -53,9 +53,13 @@ final class HotkeyGestureTests: XCTestCase {
         _ = gesture.handle(.release, at: 1.1)
         XCTAssertTrue(gesture.isDictating, "waiting for a second press")
         _ = gesture.handle(.press, at: 1.3)
+        XCTAssertTrue(gesture.isDictating, "the second press")
+        _ = gesture.handle(.release, at: 1.4)
         XCTAssertTrue(gesture.isDictating, "hands-free")
         _ = gesture.handle(.press, at: 5)
-        XCTAssertFalse(gesture.isDictating, "stopped, waiting for the key to come up")
+        XCTAssertTrue(gesture.isDictating, "a stop press, until it comes up alone")
+        _ = gesture.handle(.release, at: 5.1)
+        XCTAssertFalse(gesture.isDictating, "stopped")
     }
 
     func testAnotherKeyWhileHoldingIsAShortcutNotDictation() {
@@ -70,6 +74,31 @@ final class HotkeyGestureTests: XCTestCase {
         _ = run([(.press, 0), (.release, 0.1), (.press, 0.3), (.release, 0.4)])
         XCTAssertEqual(gesture.handle(.otherKey, at: 1), [])
         XCTAssertEqual(gesture.state, .handsFree)
+    }
+
+    func testAShortcutDuringHandsFreeKeepsDictating() {
+        // fn + → moves the cursor; it isn't the stop press.
+        _ = run([(.press, 0), (.release, 0.1), (.press, 0.3), (.release, 0.4)])
+        XCTAssertEqual(run([(.press, 3), (.otherKey, 3.1), (.release, 3.2)]), [[], [], []])
+        XCTAssertEqual(gesture.state, .handsFree)
+        XCTAssertEqual(run([(.press, 6), (.release, 6.1)]), [[], [.commit]])
+    }
+
+    func testATapThenAShortcutIsNotHandsFree() {
+        // A quick fn, then fn + → straight after: the second press was a shortcut.
+        XCTAssertEqual(
+            run([(.press, 0), (.release, 0.1), (.press, 0.3), (.otherKey, 0.35), (.release, 0.4)]),
+            [[.start], [], [], [.cancel], []])
+        XCTAssertEqual(gesture.state, .idle)
+    }
+
+    func testLostKeysOrMicrophoneCancelAnyDictation() {
+        XCTAssertEqual(run([(.press, 0), (.interrupted, 0.3)]), [[.start], [.cancel]])
+        XCTAssertEqual(gesture.state, .idle, "the next press starts afresh, even if the release was lost")
+        _ = run([(.press, 1), (.release, 1.1), (.press, 1.3), (.release, 1.4)])
+        XCTAssertEqual(run([(.interrupted, 5)]), [[.cancel]])
+        XCTAssertEqual(gesture.state, .idle)
+        XCTAssertEqual(run([(.interrupted, 6)]), [[]], "nothing to cancel")
     }
 
     func testAQuickPressAfterAHoldStartsANewDictation() {

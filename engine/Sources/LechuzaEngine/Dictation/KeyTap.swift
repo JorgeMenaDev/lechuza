@@ -3,30 +3,27 @@ import Foundation
 import Synchronization
 
 /// Watches the keyboard in every app through a session event tap, which
-/// macOS allows once Lechuza has Accessibility. Reports the hotkey's presses
-/// and releases, Esc, and other keys to `onInput`, with the time they
-/// happened. While `dictating` is set, Esc is swallowed so it cancels the
-/// dictation without also reaching the app underneath. The tap runs on its
-/// own thread, so a busy main actor never delays a key.
+/// macOS allows once Lechuza has Accessibility. `KeyFilter` turns each event
+/// into a gesture input for `onInput`, with the time it happened, and says
+/// which to swallow. The tap runs on its own thread, so a busy main actor
+/// never delays a key.
 final class KeyTap: @unchecked Sendable {
     /// Marks Lechuza's own keystrokes (the ⌘V that pastes), so they are not
     /// taken for the user's.
     static let ownEvent: Int64 = 0x4C43_485A
 
-    private static let escape: Int64 = 53
-
-    let dictating = Mutex(false)
-    private let hotkey: Hotkey
+    /// Set while Esc belongs to Lechuza: a dictation is listening or waiting
+    /// to paste.
+    let escapeIsOurs = Mutex(false)
     private let onInput: @Sendable (HotkeyGesture.Input, TimeInterval) -> Void
     private var port: CFMachPort?
     private var runLoop: CFRunLoop?
     // Only touched on the tap's thread.
-    private var down = false
-    private var swallowingEscape = false
+    private var filter: KeyFilter
 
     /// Nil when macOS refuses the tap: Accessibility isn't granted.
     init?(hotkey: Hotkey, onInput: @escaping @Sendable (HotkeyGesture.Input, TimeInterval) -> Void) {
-        self.hotkey = hotkey
+        self.filter = KeyFilter(hotkey: hotkey)
         self.onInput = onInput
         let events: [CGEventType] = [.flagsChanged, .keyDown, .keyUp]
         guard
@@ -65,33 +62,76 @@ final class KeyTap: @unchecked Sendable {
 
     /// Whether to drop `event` instead of passing it on.
     private func swallows(_ type: CGEventType, _ event: CGEvent) -> Bool {
-        let now = ProcessInfo.processInfo.systemUptime
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         guard event.getIntegerValueField(.eventSourceUserData) != Self.ownEvent else { return false }
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let key: KeyFilter.Event
         switch type {
         case .flagsChanged:
-            guard let isDown = hotkey.isDown(keyCode: keyCode, flags: event.flags), isDown != down else { return false }
-            down = isDown
-            onInput(isDown ? .press : .release, now)
-            return false
-        case .keyDown where keyCode == Self.escape:
-            guard dictating.withLock({ $0 }) else { return false }
-            swallowingEscape = true
-            onInput(.escape, now)
-            return true
+            key = .flagsChanged(keyCode: keyCode, flags: event.flags)
         case .keyDown:
-            if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 { onInput(.otherKey, now) }
-            return false
-        case .keyUp where keyCode == Self.escape && swallowingEscape:
-            swallowingEscape = false
-            return true
+            key = .keyDown(keyCode: keyCode, isRepeat: event.getIntegerValueField(.keyboardEventAutorepeat) != 0)
+        case .keyUp:
+            key = .keyUp(keyCode: keyCode)
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             // macOS turns a slow tap off; turn it back on.
             FileHandle.standardError.write(Data("key tap turned off (\(type.rawValue)), turning it back on\n".utf8))
             if let port { CGEvent.tapEnable(tap: port, enable: true) }
-            return false
+            key = .tapDisabled
         default:
             return false
+        }
+        let (input, swallow) = filter.handle(key, escapeIsOurs: escapeIsOurs.withLock { $0 })
+        if let input { onInput(input, ProcessInfo.processInfo.systemUptime) }
+        return swallow
+    }
+}
+
+/// The key tap's decisions, as a pure value the tests drive without a
+/// keyboard: which events are the hotkey's presses and releases, Esc or
+/// another key, and which to swallow. Esc is swallowed, with its key-up,
+/// while it belongs to Lechuza.
+struct KeyFilter {
+    enum Event: Equatable {
+        case flagsChanged(keyCode: Int64, flags: CGEventFlags)
+        case keyDown(keyCode: Int64, isRepeat: Bool)
+        case keyUp(keyCode: Int64)
+        /// macOS turned the tap off for a while, so events went missing.
+        case tapDisabled
+    }
+
+    private static let escape: Int64 = 53
+
+    let hotkey: Hotkey
+    private var down = false
+    private var swallowingEscape = false
+
+    init(hotkey: Hotkey) {
+        self.hotkey = hotkey
+    }
+
+    /// The gesture input `event` makes, if any, and whether to drop it.
+    /// `escapeIsOurs`: a dictation is listening or waiting to paste.
+    mutating func handle(_ event: Event, escapeIsOurs: Bool) -> (input: HotkeyGesture.Input?, swallow: Bool) {
+        switch event {
+        case .flagsChanged(let keyCode, let flags):
+            guard let isDown = hotkey.isDown(keyCode: keyCode, flags: flags), isDown != down else { return (nil, false) }
+            down = isDown
+            return (isDown ? .press : .release, false)
+        case .keyDown(Self.escape, _):
+            guard escapeIsOurs else { return (nil, false) }
+            swallowingEscape = true
+            return (.escape, true)
+        case .keyDown(_, let isRepeat):
+            return (isRepeat ? nil : .otherKey, false)
+        case .keyUp(Self.escape) where swallowingEscape:
+            swallowingEscape = false
+            return (nil, true)
+        case .keyUp:
+            return (nil, false)
+        case .tapDisabled:
+            // A release may be among the missing events: start over with the key up.
+            self = KeyFilter(hotkey: hotkey)
+            return (.interrupted, false)
         }
     }
 }
