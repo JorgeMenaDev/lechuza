@@ -112,7 +112,7 @@ Each meeting is a plain folder in `~/Documents/Lechuza/Meetings/<yyyy-MM-dd-HHmm
 
 1. Download the latest `Lechuza-…-arm64.dmg` from [Releases](https://github.com/JorgeMenaDev/lechuza/releases/latest).
 2. Open it and drag **Lechuza** to **Applications**.
-3. Open **Lechuza** from Applications. Releases are not notarized by Apple yet, so macOS warns that it can't verify the app. Close the warning, then go to System Settings → Privacy & Security, scroll down to Security, click **Open Anyway** and confirm with your password. After each update, macOS may ask for Microphone, System Audio Recording and Accessibility again.
+3. Open **Lechuza** from Applications. It is signed and notarized by Apple, so it opens like any app.
 4. Click **Allow Accessibility** on Home, so dictation works in every app. Then in System Settings → Keyboard, set **Press 🌐 key to** to **Do Nothing**.
 5. Lechuza downloads the speech model once (about 470 MB), the first time it needs it: when dictation is set up or at your first meeting. The Meetings page shows the progress.
 
