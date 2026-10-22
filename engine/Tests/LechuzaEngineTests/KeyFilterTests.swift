@@ -63,6 +63,17 @@ final class KeyFilterTests: XCTestCase {
         XCTAssertEqual(inputs([.tapDisabled, optionDown, optionUp]), [.interrupted, nil, nil])
     }
 
+    /// A real fn double-press, recorded on a MacBook: as fn comes up from a
+    /// quick press, macOS sends a keyDown and keyUp of 🌐 (key code 179). It
+    /// isn't another key, or it would cancel the first press before the second.
+    func testTheGlobeKeyMacOSSendsAfterAQuickFnPressIsNotAnotherKey() {
+        filter = KeyFilter(hotkey: .fn)
+        let fnDown = KeyFilter.Event.flagsChanged(keyCode: 63, flags: CGEventFlags(rawValue: 0x80_0100))
+        let fnUp = KeyFilter.Event.flagsChanged(keyCode: 63, flags: CGEventFlags(rawValue: 0x100))
+        let tap: [KeyFilter.Event] = [fnDown, fnUp, .keyDown(keyCode: 179, isRepeat: false), .keyUp(keyCode: 179)]
+        XCTAssertEqual(inputs(tap + tap).compactMap { $0 }, [.press, .release, .press, .release])
+    }
+
     /// The hotkey itself, and a modifier held with it (⇧ here), don't make
     /// it a shortcut.
     func testAModifierHeldWithTheHotkeyStillCounts() {
