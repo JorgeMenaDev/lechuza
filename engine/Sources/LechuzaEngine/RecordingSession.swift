@@ -35,6 +35,9 @@ final class RecordingSession {
         var segmentIndex = 1
         var pendingRestart: (dueMs: Int, attempt: Int)?
         var lastBufferEndMs: Int?
+        /// Its teardown timed out, so its control queue is blocked: never
+        /// start or stop it again.
+        var wedged = false
 
         init(recorder: any TrackRecorder) {
             self.recorder = recorder
@@ -120,7 +123,7 @@ final class RecordingSession {
             track.pendingRestart = nil
             track.machine?.stopped()
             let finalTelemetry = track.recorder.telemetry()
-            record(track.recorder.stop(), into: track)
+            if !track.wedged { record(track.recorder.stop(), into: track) }
             let status =
                 track.machine?.finalize(
                     stopMs: stopMs,
@@ -243,10 +246,20 @@ final class RecordingSession {
 
     /// One serialized recovery step: close the current segment (preserving
     /// whatever it captured), then rebuild the recorder on the current route
-    /// into the next numbered file.
+    /// into the next numbered file. A teardown that times out degrades the
+    /// track instead: starting it again would block the main actor on the
+    /// same stuck queue, and with it Stop and shutdown.
     private func performRestart(_ track: TrackState) {
         guard live else { return }
-        record(track.recorder.stop(), into: track)
+        let stop = track.recorder.stop()
+        record(stop, into: track)
+        if case .timedOut = stop {
+            track.wedged = true
+            if let command = track.machine?.abandon(error: "\(track.recorder.kind.label) teardown timed out") {
+                execute(command, on: track)
+            }
+            return
+        }
         track.segmentIndex += 1
         let now = nowMs()
         do {
@@ -262,8 +275,8 @@ final class RecordingSession {
     /// Append a finished segment to the track's metadata record. A segment
     /// that never wrote a buffer stays on disk but earns no metadata entry —
     /// there is nothing to transcribe or align.
-    private func record(_ stats: SegmentStats?, into track: TrackState) {
-        guard let stats else { return }
+    private func record(_ stop: SegmentStop, into track: TrackState) {
+        guard let stats = stop.stats else { return }
         if let end = stats.lastBufferEndMs {
             track.lastBufferEndMs = max(track.lastBufferEndMs ?? 0, end)
         }

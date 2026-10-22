@@ -259,6 +259,20 @@ struct TrackHealthMachine: Sendable {
         return nextAttemptOrDegrade(nowMs: now)
     }
 
+    /// The recorder can't be restarted (its teardown never returned): give
+    /// up on the track for the rest of the session.
+    mutating func abandon(error: String) -> Command? {
+        guard state == .recovering else { return nil }
+        restartInFlight = false
+        episodeAttempts = nil
+        if var open = interruptions.last, open.recovered_offset_ms == nil {
+            open.error = error
+            interruptions[interruptions.count - 1] = open
+        }
+        state = .degraded
+        return .declareDegraded
+    }
+
     /// The user stopped the session; no further commands are issued.
     mutating func stopped() {
         state = .stopped

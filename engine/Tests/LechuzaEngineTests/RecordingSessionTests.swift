@@ -10,7 +10,13 @@ final class FakeRecorder: TrackRecorder, @unchecked Sendable {
     var startedFiles: [String] = []
     var startAttempts = 0
     var failStarts = false
+    /// Teardown wedges: stop times out and the recorder's queue stays
+    /// blocked, so a real start would never return.
+    var stopTimesOut = false
+    var stopCalls = 0
+    var startsWhileWedged = 0
     private var active = false
+    private var wedged = false
 
     init(kind: TrackKind) {
         self.kind = kind
@@ -20,16 +26,18 @@ final class FakeRecorder: TrackRecorder, @unchecked Sendable {
 
     func start(url: URL, clock: SessionClock, onEvent: @escaping @Sendable (RecorderEvent) -> Void) throws {
         startAttempts += 1
+        if wedged { startsWhileWedged += 1 }
         if failStarts { throw StartError() }
         active = true
         current = TelemetrySnapshot()
         startedFiles.append(url.lastPathComponent)
     }
 
-    func stop() -> SegmentStats? {
-        guard active else { return nil }
+    func stop() -> SegmentStop {
+        stopCalls += 1
+        guard active else { return .stopped(nil) }
         active = false
-        return SegmentStats(
+        let stats = SegmentStats(
             file: startedFiles.last ?? "?",
             firstWriteMs: current.firstWriteMs,
             lastBufferEndMs: current.lastBufferEndMs,
@@ -37,6 +45,11 @@ final class FakeRecorder: TrackRecorder, @unchecked Sendable {
             sampleRateHz: 48000,
             channels: 1
         )
+        if stopTimesOut {
+            wedged = true
+            return .timedOut(stats)
+        }
+        return .stopped(stats)
     }
 
     func telemetry() -> TelemetrySnapshot {
@@ -217,12 +230,38 @@ final class RecordingSessionTests: XCTestCase {
         XCTAssertEqual(meta.tracks.first { $0.kind == .mic }!.segments.map(\.file), ["mic.caf"])
     }
 
+    func testATeardownThatTimesOutDegradesTheTrackWithoutRestartingIt() throws {
+        var degradedTracks: [TrackKind] = []
+        let session = try makeSession()
+        session.onDegraded = { degradedTracks.append($0) }
+        try session.start()
+        tick(session, at: 1000)
+
+        // The mic stalls and its teardown wedges on the way to a restart.
+        mic.stopTimesOut = true
+        mic.writes(first: 500, last: 1000)
+        tick(session, at: 6000, micStalled: true)
+        tick(session, at: 7000, micStalled: true)
+        XCTAssertEqual(mic.startsWhileWedged, 0)
+        XCTAssertEqual(degradedTracks, [.mic])
+
+        // Stop doesn't wait on the blocked queue again, and keeps what the
+        // mic wrote before it wedged.
+        time.ms = 8000
+        let result = session.stop()
+        XCTAssertEqual(mic.stopCalls, 1)
+        XCTAssertEqual(result.status, .incomplete)
+        let micTrack = try readMeta(session).tracks.first { $0.kind == .mic }!
+        XCTAssertEqual(micTrack.status, .incomplete)
+        XCTAssertEqual(micTrack.segments.map(\.file), ["mic.caf"])
+    }
+
     func testStartupFailureRollsBackStartedTracks() throws {
         mic.failStarts = true
         let session = try makeSession()
         XCTAssertThrowsError(try session.start())
         // System started first and must be torn down again.
         XCTAssertEqual(system.startedFiles, ["system.caf"])
-        XCTAssertNil(system.stop())  // already stopped by rollback
+        XCTAssertNil(system.stop().stats)  // already stopped by rollback
     }
 }
