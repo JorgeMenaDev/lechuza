@@ -15,8 +15,8 @@ enum Mixer {
 
         var description: String {
             switch self {
-            case .noAudio: return "no audio was recorded"
-            case .failed(let reason): return "mixing failed: \(reason)"
+            case .noAudio: return "No audio was recorded."
+            case .failed(let reason): return "Mixing the tracks failed: \(reason)"
             }
         }
     }

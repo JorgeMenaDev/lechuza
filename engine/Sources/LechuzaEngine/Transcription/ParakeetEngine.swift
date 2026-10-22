@@ -21,7 +21,7 @@ actor ParakeetEngine {
         var description: String {
             switch self {
             case .unreadableAudio(let url, let e):
-                return "unreadable or empty audio \(url.lastPathComponent)"
+                return "Unreadable or empty audio in \(url.lastPathComponent)"
                     + (e.map { ": \($0)" } ?? "")
             }
         }

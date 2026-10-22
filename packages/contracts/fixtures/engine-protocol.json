@@ -31,7 +31,7 @@
     {
       "type": "transcription.failed",
       "dir": "/Users/me/Documents/Lechuza/Meetings/2026-10-22-1405",
-      "message": "no audio was recorded"
+      "message": "No audio was recorded."
     },
     { "type": "error", "message": "unreadable command: nope" }
   ]

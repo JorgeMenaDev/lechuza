@@ -12,7 +12,7 @@ describe("engine protocol fixture", () => {
   });
 
   test("holds one valid example of every event", () => {
-    const parsed = fixture.events.map((event) => parseEngineEvent(JSON.stringify(event)));
+    const parsed: unknown[] = fixture.events.map((event) => parseEngineEvent(JSON.stringify(event)));
     expect(parsed).toEqual(fixture.events);
     expect(fixture.events.map((event) => event.type).sort()).toEqual([...ENGINE_EVENT_TYPES].sort());
   });

@@ -44,7 +44,7 @@ struct SessionMeta: Codable, Equatable, Sendable {
 
         var description: String {
             switch self {
-            case .unreadable(let url): return "can't parse \(url.path)"
+            case .unreadable(let url): return "Can't read \(url.lastPathComponent); the recording may not have finished."
             }
         }
     }
