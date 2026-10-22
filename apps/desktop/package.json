@@ -39,6 +39,7 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": "dmg",
+      "icon": "build/icon.icns",
       "minimumSystemVersion": "15.0",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Lechuza records your microphone during meetings, so you can replay and read them. Audio never leaves this Mac.",
