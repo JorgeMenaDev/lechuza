@@ -1,0 +1,38 @@
+{
+  "commands": [
+    { "type": "meeting.start", "root": "/Users/me/Documents/Lechuza/Meetings" },
+    { "type": "meeting.stop" },
+    { "type": "transcription.start", "dir": "/Users/me/Documents/Lechuza/Meetings/2026-10-22-1405" },
+    { "type": "model.prepare" }
+  ],
+  "events": [
+    { "type": "ready", "modelDownloaded": false },
+    {
+      "type": "meeting.started",
+      "dir": "/Users/me/Documents/Lechuza/Meetings/2026-10-22-1405",
+      "startedAt": "2026-10-22T14:05:09Z"
+    },
+    { "type": "meeting.level", "mic": 0.25, "system": 0.5 },
+    {
+      "type": "meeting.warning",
+      "message": "Microphone capture was lost. The recording will be marked incomplete."
+    },
+    {
+      "type": "meeting.stopped",
+      "dir": "/Users/me/Documents/Lechuza/Meetings/2026-10-22-1405",
+      "status": "recovered"
+    },
+    { "type": "meeting.failed", "message": "A meeting is already recording." },
+    { "type": "model.progress", "phase": "downloading", "fraction": 0.5 },
+    { "type": "model.ready" },
+    { "type": "model.failed", "message": "The network connection was lost." },
+    { "type": "transcription.started", "dir": "/Users/me/Documents/Lechuza/Meetings/2026-10-22-1405" },
+    { "type": "transcription.done", "dir": "/Users/me/Documents/Lechuza/Meetings/2026-10-22-1405" },
+    {
+      "type": "transcription.failed",
+      "dir": "/Users/me/Documents/Lechuza/Meetings/2026-10-22-1405",
+      "message": "no audio was recorded"
+    },
+    { "type": "error", "message": "unreadable command: nope" }
+  ]
+}
