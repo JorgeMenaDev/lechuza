@@ -5,8 +5,9 @@ import { MEDIA_SCHEME, type Meeting, type MeetingState, type TranscriptLine } fr
 
 // Meetings live as plain folders under the meetings root, one per meeting,
 // named <yyyy-MM-dd-HHmm> (with -2, -3… on a clash). The engine writes:
-//   mic.caf, system.caf    the two tracks (mic-002.caf… after a capture restart)
+//   mic.aac, system.aac    the two tracks (mic-002.aac… after a capture restart)
 //   meeting.m4a            the mix the app plays
+//   recording.json         the segments so far, while recording; a crash leaves it behind
 //   meta.json              times and tracks; the app adds `title` on rename
 //   transcript.json / .md  the me / them transcript
 //   transcript-error.txt   why the last transcription failed
@@ -14,6 +15,7 @@ import { MEDIA_SCHEME, type Meeting, type MeetingState, type TranscriptLine } fr
 const FOLDER_NAME = /^(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})(?:-\d+)?$/;
 export const MIX_FILE = "meeting.m4a";
 const ERROR_FILE = "transcript-error.txt";
+const MANIFEST_FILE = "recording.json";
 
 // What main knows about meetings that disk doesn't say yet.
 export interface LiveMeetings {
@@ -94,13 +96,20 @@ export class MeetingLibrary {
     return path.dirname(resolved) === path.resolve(this.root) && FOLDER_NAME.test(id) ? resolved : null;
   }
 
-  mixFile(id: string): string | null {
+  // The real path of a meeting's mix, or null when it's missing or a symlink
+  // (of the file or its folder) leads out of the meetings folder.
+  async mixFile(id: string): Promise<string | null> {
     const dir = this.dir(id);
-    return dir && path.join(dir, MIX_FILE);
+    if (!dir) return null;
+    const [file, root] = await Promise.all([fs.realpath(path.join(dir, MIX_FILE)), fs.realpath(this.root)]).catch(
+      () => [null, null],
+    );
+    return file && root && file.startsWith(root + path.sep) ? file : null;
   }
 
   // Newest first. State comes from the files, overridden by what main knows
-  // is live: recording > transcribing > ready > failed.
+  // is live: recording > transcribing > failed > ready. An error beats a
+  // transcript, which may hold only the segments that worked.
   async list(live: LiveMeetings): Promise<Meeting[]> {
     const names = await fs.readdir(this.root).catch(() => []);
     const meetings = await Promise.all(names.filter((name) => FOLDER_NAME.test(name)).map((id) => this.load(id, live)));
@@ -129,17 +138,19 @@ export class MeetingLibrary {
     if (dir) await fs.writeFile(path.join(dir, ERROR_FILE), `${message}\n`);
   }
 
-  // Finished meetings with neither a transcript nor a failure: transcription
-  // was cut short, so it runs again at launch. Oldest first.
+  // Meetings with neither a transcript nor a failure, so transcription runs
+  // at launch: finished ones whose transcription was cut short, and ones the
+  // engine crashed on while recording (only the manifest), which it recovers
+  // first. Oldest first.
   async untranscribed(): Promise<string[]> {
     const names = await fs.readdir(this.root).catch(() => []);
     const pending = await Promise.all(
       names.filter((name) => FOLDER_NAME.test(name)).map(async (id) => {
         const dir = path.join(this.root, id);
-        const [meta, transcript, error] = await Promise.all(
-          ["meta.json", "transcript.json", ERROR_FILE].map((file) => exists(path.join(dir, file))),
+        const [meta, manifest, transcript, error] = await Promise.all(
+          ["meta.json", MANIFEST_FILE, "transcript.json", ERROR_FILE].map((file) => exists(path.join(dir, file))),
         );
-        return meta && !transcript && !error ? [id] : [];
+        return (meta || manifest) && !transcript && !error ? [id] : [];
       }),
     );
     return pending.flat().sort();
@@ -163,11 +174,13 @@ export class MeetingLibrary {
       ? "recording"
       : live.transcribing.has(id)
         ? "transcribing"
-        : hasTranscript
-          ? "ready"
-          : error !== null || !meta
-            ? "failed"
-            : "transcribing";
+        : error !== null
+          ? "failed"
+          : hasTranscript
+            ? "ready"
+            : !meta
+              ? "failed"
+              : "transcribing";
     return {
       id,
       title: meta?.title ?? defaultTitle(startedAt, this.locale),

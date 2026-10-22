@@ -46,10 +46,13 @@ enum TrackKind: String, Codable, CaseIterable, Sendable {
     /// Human-readable name for menu and notification text.
     var label: String { self == .mic ? "microphone" : "system audio" }
 
-    /// Base file name of the track's first segment ("mic.caf"); later
-    /// segments append a counter ("mic-002.caf").
+    /// Base file name of the track's first segment ("mic.aac"); later
+    /// segments append a counter ("mic-002.aac"). ADTS AAC, whose frames
+    /// each carry their own header: a file the engine never closed (it
+    /// crashed) still reads back. AAC in CAF needs a packet table written
+    /// on close, so a crash left it unreadable.
     func segmentFile(index: Int) -> String {
-        index <= 1 ? "\(rawValue).caf" : String(format: "%@-%03d.caf", rawValue, index)
+        index <= 1 ? "\(rawValue).aac" : String(format: "%@-%03d.aac", rawValue, index)
     }
 }
 
@@ -257,6 +260,20 @@ struct TrackHealthMachine: Sendable {
             interruptions[interruptions.count - 1] = open
         }
         return nextAttemptOrDegrade(nowMs: now)
+    }
+
+    /// The recorder can't be restarted (its teardown never returned): give
+    /// up on the track for the rest of the session.
+    mutating func abandon(error: String) -> Command? {
+        guard state == .recovering else { return nil }
+        restartInFlight = false
+        episodeAttempts = nil
+        if var open = interruptions.last, open.recovered_offset_ms == nil {
+            open.error = error
+            interruptions[interruptions.count - 1] = open
+        }
+        state = .degraded
+        return .declareDegraded
     }
 
     /// The user stopped the session; no further commands are issued.

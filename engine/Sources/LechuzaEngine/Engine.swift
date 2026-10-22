@@ -132,10 +132,16 @@ final class Engine {
 
     private func transcribe(_ path: String) async {
         let dir = URL(fileURLWithPath: path, isDirectory: true)
-        let errorURL = dir.appendingPathComponent(Transcriber.errorFile)
-        try? FileManager.default.removeItem(at: errorURL)
+        // An error from an earlier attempt stays until this one succeeds
+        // (the transcriber removes it), so a crash mid-Retry still reads as
+        // failed.
         emit(.transcriptionStarted(dir: path))
         do {
+            // A recording the engine never stopped (it crashed) has only its
+            // manifest. The one being recorded now is left alone.
+            if session?.dir.standardizedFileURL.path != dir.standardizedFileURL.path {
+                try SessionMeta.recoverIfCrashed(dir)
+            }
             let (inputs, captureStatus) = try SessionMeta.readInputs(from: dir)
             if !FileManager.default.fileExists(atPath: dir.appendingPathComponent(Mixer.fileName).path) {
                 try await Mixer.mix(inputs, in: dir)
@@ -148,7 +154,7 @@ final class Engine {
         } catch {
             await parakeet.release()
             Transcriber.log(dir, "transcription failed: \(error)")
-            try? Data("\(error)\n".utf8).write(to: errorURL, options: .atomic)
+            try? Transcriber.recordFailure(error, in: dir)
             emit(.transcriptionFailed(dir: path, message: "\(error)"))
         }
     }

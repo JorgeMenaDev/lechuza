@@ -13,7 +13,8 @@ enum EngineCommand: Equatable, Sendable {
     case meetingStart(root: String)
     /// Stop the meeting, write meta.json and the mix.
     case meetingStop
-    /// Transcribe a finished session folder (mixing it first if needed).
+    /// Transcribe a finished session folder (mixing it first if needed). A
+    /// folder the engine crashed on while recording is recovered first.
     case transcriptionStart(dir: String)
     /// Download the speech model if it is missing.
     case modelPrepare

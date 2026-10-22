@@ -1,7 +1,9 @@
 import Foundation
 
 /// One meeting recording: a timestamped folder holding two independent tracks
-/// (mic = you, system = them) plus a meta.json written on clean stop. Tracks
+/// (mic = you, system = them) plus a meta.json written on clean stop. Until
+/// then a manifest (recording.json) lists every segment from before it
+/// starts writing, so a crashed recording can still be recovered. Tracks
 /// are separate on purpose — speech models do better on clean single-source audio,
 /// and two tracks give free two-party diarization.
 ///
@@ -33,8 +35,14 @@ final class RecordingSession {
         var machine: TrackHealthMachine?
         var segments: [SessionMeta.Segment] = []
         var segmentIndex = 1
+        /// The segment being written, with the session time it started
+        /// (its first write, once it has one). The manifest lists it.
+        var live: (file: String, startMs: Int)?
         var pendingRestart: (dueMs: Int, attempt: Int)?
         var lastBufferEndMs: Int?
+        /// Its teardown timed out, so its control queue is blocked: never
+        /// start or stop it again.
+        var wedged = false
 
         init(recorder: any TrackRecorder) {
             self.recorder = recorder
@@ -47,6 +55,8 @@ final class RecordingSession {
     private let tracks: [TrackState]
     private var watchdog: Task<Void, Never>?
     private var live = false
+    /// The manifest as last written, so it's rewritten only when it changes.
+    private var manifest: SessionMeta?
 
     private static let folderFormat: DateFormatter = {
         let f = DateFormatter()
@@ -97,6 +107,7 @@ final class RecordingSession {
                 for rollback in started {
                     _ = rollback.recorder.stop()
                 }
+                try? FileManager.default.removeItem(at: dir.appendingPathComponent(SessionMeta.manifestFile))
                 throw error
             }
         }
@@ -120,7 +131,7 @@ final class RecordingSession {
             track.pendingRestart = nil
             track.machine?.stopped()
             let finalTelemetry = track.recorder.telemetry()
-            record(track.recorder.stop(), into: track)
+            if !track.wedged { record(track.recorder.stop(), into: track) }
             let status =
                 track.machine?.finalize(
                     stopMs: stopMs,
@@ -152,7 +163,9 @@ final class RecordingSession {
         )
         do {
             try meta.write(to: dir)
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent(SessionMeta.manifestFile))
         } catch {
+            // The manifest stays, so the meeting can still be recovered.
             FileHandle.standardError.write(Data("meta.json write failed: \(error)\n".utf8))
         }
         return StopResult(dir: dir, status: worst)
@@ -172,6 +185,12 @@ final class RecordingSession {
             if let command = track.machine!.tick(nowMs: now, telemetry: track.recorder.telemetry()) {
                 execute(command, on: track)
             }
+            if let first = track.recorder.telemetry().firstWriteMs { track.live?.startMs = first }
+        }
+        do {
+            try writeManifest()
+        } catch {
+            FileHandle.standardError.write(Data("recording.json write failed: \(error)\n".utf8))
         }
     }
 
@@ -185,6 +204,36 @@ final class RecordingSession {
 
     // MARK: -
 
+    /// Write recording.json when its segments changed: every finished
+    /// segment, plus the live one. The live segment's length is unknown until
+    /// it stops; recovery reads it from the file.
+    private func writeManifest() throws {
+        let trackMetas = tracks.map { track in
+            var segments = track.segments
+            if let live = track.live {
+                segments.append(
+                    SessionMeta.Segment(
+                        file: live.file, start_offset_ms: live.startMs, end_offset_ms: live.startMs,
+                        frames_written: 0, sample_rate_hz: 0, channels: 0))
+            }
+            return SessionMeta.Track(
+                kind: track.recorder.kind,
+                speaker: track.recorder.kind.speaker,
+                status: .incomplete,
+                segments: segments,
+                interruptions: track.machine?.interruptions ?? [],
+                warnings: track.machine?.warnings ?? []
+            )
+        }
+        let started = ISO8601DateFormatter().string(from: startedAt)
+        let manifest = SessionMeta(
+            schema_version: 2, started: started, ended: started, duration_seconds: 0,
+            status: .incomplete, tracks: trackMetas.sorted { $0.kind == .mic && $1.kind != .mic })
+        guard manifest != self.manifest else { return }
+        try manifest.write(to: dir, as: SessionMeta.manifestFile)
+        self.manifest = manifest
+    }
+
     private func startWatchdog() {
         watchdog = Task { [weak self] in
             while !Task.isCancelled {
@@ -195,15 +244,23 @@ final class RecordingSession {
     }
 
     /// Start the track's next numbered segment and (on first start) its
-    /// health machine.
+    /// health machine. The segment is in the manifest before its recorder
+    /// starts, so a crash at any point leaves its audio findable.
     private func startSegment(_ track: TrackState) throws {
         let kind = track.recorder.kind
         let name = kind.segmentFile(index: track.segmentIndex)
         let url = dir.appendingPathComponent(name)
-        try track.recorder.start(url: url, clock: clock) { [weak self] event in
-            Task { @MainActor [weak self] in
-                self?.handle(event, on: kind)
+        track.live = (name, nowMs())
+        do {
+            try writeManifest()
+            try track.recorder.start(url: url, clock: clock) { [weak self] event in
+                Task { @MainActor [weak self] in
+                    self?.handle(event, on: kind)
+                }
             }
+        } catch {
+            track.live = nil
+            throw error
         }
         if track.machine == nil {
             track.machine = TrackHealthMachine(kind: kind, policy: policy, startMs: nowMs())
@@ -243,10 +300,20 @@ final class RecordingSession {
 
     /// One serialized recovery step: close the current segment (preserving
     /// whatever it captured), then rebuild the recorder on the current route
-    /// into the next numbered file.
+    /// into the next numbered file. A teardown that times out degrades the
+    /// track instead: starting it again would block the main actor on the
+    /// same stuck queue, and with it Stop and shutdown.
     private func performRestart(_ track: TrackState) {
         guard live else { return }
-        record(track.recorder.stop(), into: track)
+        let stop = track.recorder.stop()
+        record(stop, into: track)
+        if case .timedOut = stop {
+            track.wedged = true
+            if let command = track.machine?.abandon(error: "\(track.recorder.kind.label) teardown timed out") {
+                execute(command, on: track)
+            }
+            return
+        }
         track.segmentIndex += 1
         let now = nowMs()
         do {
@@ -262,8 +329,9 @@ final class RecordingSession {
     /// Append a finished segment to the track's metadata record. A segment
     /// that never wrote a buffer stays on disk but earns no metadata entry —
     /// there is nothing to transcribe or align.
-    private func record(_ stats: SegmentStats?, into track: TrackState) {
-        guard let stats else { return }
+    private func record(_ stop: SegmentStop, into track: TrackState) {
+        track.live = nil
+        guard let stats = stop.stats else { return }
         if let end = stats.lastBufferEndMs {
             track.lastBufferEndMs = max(track.lastBufferEndMs ?? 0, end)
         }

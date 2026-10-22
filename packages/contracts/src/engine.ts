@@ -42,7 +42,8 @@ const COMMANDS = {
   "meeting.start": { root: "string" },
   // Stop the meeting; the engine writes meta.json and meeting.m4a, then reports meeting.stopped.
   "meeting.stop": {},
-  // Transcribe a finished session folder, one at a time.
+  // Transcribe a finished session folder, one at a time. A folder the engine
+  // crashed on while recording (only recording.json) is recovered first.
   "transcription.start": { dir: "string" },
   // Download the speech model if it is missing, with model.progress events.
   "model.prepare": {},
