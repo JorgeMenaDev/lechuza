@@ -47,7 +47,10 @@ export function Meeting(props: { meeting: MeetingData; state: AppState; onBack: 
         {meeting.state === "failed" && (
           <div className="meeting-error" role="alert">
             <p>
-              <strong>Couldn't transcribe this meeting.</strong> {meeting.error}
+              <strong>
+                {lines.length > 0 ? "Part of this meeting couldn't be transcribed." : "Couldn't transcribe this meeting."}
+              </strong>{" "}
+              {meeting.error}
             </p>
             <button className="btn btn-secondary" onClick={() => void lechuza.retryTranscription(meeting.id)}>
               <RotateCcw /> Retry
