@@ -3,14 +3,20 @@
 // stdout. The Swift side mirrors these as Codable enums in
 // engine/Sources/LechuzaEngine/Protocol.swift; fixtures/engine-protocol.json
 // holds one example of every message and both sides' tests decode it.
-// Types are grouped by feature, so `dictation.*` can join without touching
-// `meeting.*`, `model.*` or `transcription.*`.
+// Types are grouped by feature: `meeting.*`, `model.*`, `transcription.*`
+// and `dictation.*`.
 
 export const TRACK_STATUSES = ["complete", "recovered", "incomplete"] as const;
 export const MODEL_PHASES = ["listing", "downloading", "compiling"] as const;
+// The keys that can start dictation: fn, the right Option or Command key, or Control and Option together.
+export const HOTKEYS = ["fn", "rightOption", "rightCommand", "controlOption"] as const;
+// idle → listening (holding the key) | handsFree (double-pressed) → transcribing → idle
+export const DICTATION_PHASES = ["idle", "listening", "handsFree", "transcribing"] as const;
 
 export type TrackStatus = (typeof TRACK_STATUSES)[number];
 export type ModelPhase = (typeof MODEL_PHASES)[number];
+export type Hotkey = (typeof HOTKEYS)[number];
+export type DictationPhase = (typeof DICTATION_PHASES)[number];
 
 // A field is a JSON primitive (named by typeof) or one of a list of strings.
 type FieldSpec = "string" | "number" | "boolean" | readonly string[];
@@ -41,6 +47,13 @@ const COMMANDS = {
   "transcription.start": { dir: "string" },
   // Download the speech model if it is missing, with model.progress events.
   "model.prepare": {},
+  // Listen for the hotkey in every app (needs Accessibility) and keep the
+  // speech model loaded. Sent again when the hotkey or the permission changes.
+  "dictation.configure": { hotkey: HOTKEYS },
+  // Start hands-free dictation, as a double-press does (the Flow bar was clicked).
+  "dictation.start": {},
+  // Stop hands-free dictation and insert the text, as a press does.
+  "dictation.stop": {},
 } as const satisfies MessageSpecs;
 
 const EVENTS = {
@@ -60,6 +73,13 @@ const EVENTS = {
   "transcription.started": { dir: "string" },
   "transcription.done": { dir: "string" },
   "transcription.failed": { dir: "string", message: "string" },
+  "dictation.state": { phase: DICTATION_PHASES },
+  // Microphone loudness (RMS, 0–1), about ten times a second while listening.
+  "dictation.level": { level: "number" },
+  // The words were pasted at the cursor; `durationMs` is how long the user spoke.
+  "dictation.done": { text: "string", startedAt: "string", durationMs: "number" },
+  // Nothing was heard, or the words could not be pasted.
+  "dictation.failed": { message: "string" },
   // A command line the engine could not act on.
   error: { message: "string" },
 } as const satisfies MessageSpecs;
@@ -82,6 +102,12 @@ function isMessage<Specs extends MessageSpecs>(specs: Specs, value: unknown): va
   if (!isRecord(value) || typeof value.type !== "string" || !Object.hasOwn(specs, value.type)) return false;
   const fields: Record<string, FieldSpec> = specs[value.type] ?? {};
   return Object.entries(fields).every(([name, spec]) => fieldMatches(spec, value[name]));
+}
+
+export type DictationEvent = Extract<EngineEvent, { type: `dictation.${string}` }>;
+
+export function isDictationEvent(event: EngineEvent): event is DictationEvent {
+  return event.type.startsWith("dictation.");
 }
 
 export function isEngineCommand(value: unknown): value is EngineCommand {

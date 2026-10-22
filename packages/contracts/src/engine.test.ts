@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import fixture from "../fixtures/engine-protocol.json";
-import { ENGINE_COMMAND_TYPES, ENGINE_EVENT_TYPES, isEngineCommand, parseEngineEvent } from "./engine.ts";
+import {
+  ENGINE_COMMAND_TYPES,
+  ENGINE_EVENT_TYPES,
+  isDictationEvent,
+  isEngineCommand,
+  parseEngineEvent,
+  type EngineEvent,
+} from "./engine.ts";
 
 // The Swift engine's ProtocolTests decode the same fixture, so both sides
 // agree on every message.
@@ -26,5 +33,18 @@ describe("parseEngineEvent", () => {
     expect(parseEngineEvent(`{"type":"meeting.stopped","dir":"/x","status":"great"}`)).toBeNull();
     expect(parseEngineEvent(`{"type":"meeting.level","mic":"loud","system":0}`)).toBeNull();
     expect(parseEngineEvent(`[{"type":"model.ready"}]`)).toBeNull();
+  });
+});
+
+describe("isDictationEvent", () => {
+  test("picks out dictation.* events", () => {
+    const events = fixture.events.map((event) => parseEngineEvent(JSON.stringify(event)));
+    const types = events.filter((event): event is EngineEvent => event !== null && isDictationEvent(event));
+    expect(types.map((event) => event.type)).toEqual([
+      "dictation.state",
+      "dictation.level",
+      "dictation.done",
+      "dictation.failed",
+    ]);
   });
 });

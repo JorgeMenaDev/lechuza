@@ -4,6 +4,7 @@ import {
   ChevronDown,
   HardDrive,
   Info,
+  Keyboard,
   Mic,
   Monitor,
   Moon,
@@ -14,10 +15,11 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import type { AppState, ExternalPage, ModelStatus, Speaker, Theme } from "@lechuza/contracts";
+import { HOTKEYS, type AppState, type ExternalPage, type ModelStatus, type Speaker, type Theme } from "@lechuza/contracts";
 
 import owl from "../../../../assets/icon.svg";
 import { lechuza } from "../bridge";
+import { HOTKEY_NAMES } from "../ui";
 
 // Settings, a dialog over the main window. Only controls with behaviour are
 // live; the rest of each section says how Lechuza works.
@@ -74,7 +76,7 @@ export function Settings({ state, onClose }: { state: AppState; onClose: () => v
 function SectionBody({ section, state }: { section: SectionId; state: AppState }) {
   switch (section) {
     case "general":
-      return <General theme={state.settings.theme} />;
+      return <General state={state} />;
     case "audio":
       return <Audio />;
     case "transcription":
@@ -82,7 +84,7 @@ function SectionBody({ section, state }: { section: SectionId; state: AppState }
     case "storage":
       return <Storage state={state} />;
     case "permissions":
-      return <Permissions />;
+      return <Permissions accessibility={state.dictation.accessibility} />;
     case "about":
       return <About version={state.info.version} />;
   }
@@ -127,10 +129,55 @@ const THEMES: ReadonlyArray<{ readonly value: Theme; readonly label: string; rea
   { value: "dark", label: "Dark", icon: Moon },
 ];
 
-function General({ theme }: { theme: Theme }) {
+function General({ state }: { state: AppState }) {
+  const { theme, hotkey, sounds } = state.settings;
   const ThemeIcon = THEMES.find((item) => item.value === theme)?.icon ?? Monitor;
   return (
     <Card>
+      <Row
+        label="Dictation shortcut"
+        control={
+          <label className="select">
+            <Keyboard className="select-icon" />
+            <select
+              aria-label="Dictation shortcut"
+              value={hotkey}
+              onChange={(event) => {
+                const next = HOTKEYS.find((item) => item === event.currentTarget.value);
+                if (next) void lechuza.setHotkey(next);
+              }}
+            >
+              {HOTKEYS.map((item) => (
+                <option key={item} value={item}>
+                  {HOTKEY_NAMES[item].name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="select-chevron" />
+          </label>
+        }
+      >
+        Hold it to dictate, or press it twice for hands-free and once more to paste. Esc cancels.
+      </Row>
+      {state.dictation.fnConflict && (
+        <Row label="Press 🌐 key to" control={<OpenButton page="keyboard-settings">Open</OpenButton>}>
+          macOS also acts on fn. Set "Press 🌐 key to" to "Do Nothing" in Keyboard settings.
+        </Row>
+      )}
+      <Row
+        label="Sounds"
+        control={
+          <button
+            className="switch"
+            role="switch"
+            aria-checked={sounds}
+            aria-label="Sounds"
+            onClick={() => void lechuza.setSounds(!sounds)}
+          />
+        }
+      >
+        A short sound when dictation starts and stops.
+      </Row>
       <Row
         label="Theme"
         control={
@@ -226,7 +273,7 @@ function Transcription({ state }: { state: AppState }) {
         {model.state === "failed"
           ? `Parakeet v3 couldn't download: ${model.message} Lechuza tries again with the next transcription.`
           : model.state === "missing"
-            ? "Parakeet v3 downloads with your first meeting, about 600 MB, once."
+            ? "Parakeet v3 downloads with your first meeting or dictation, about 600 MB, once."
             : "Parakeet v3 runs on this Mac, so audio never leaves it."}
       </Row>
       <Row label="Languages">English, Spanish and 23 other European languages, detected on their own.</Row>
@@ -256,16 +303,30 @@ function Storage({ state }: { state: AppState }) {
   );
 }
 
-function Permissions() {
+function Permissions({ accessibility }: { accessibility: boolean }) {
   return (
     <>
       <p className="settings-intro">
-        Lechuza asks the first time it needs each one. If you said no, allow Lechuza in System Settings, then start a
-        new meeting.
+        Lechuza asks the first time it needs each one. If you said no, allow Lechuza in System Settings, then try
+        again.
       </p>
       <Card>
+        <Row
+          label="Accessibility"
+          control={
+            accessibility ? (
+              <span className="model-status" data-state="ready">
+                <Check /> Allowed
+              </span>
+            ) : (
+              <OpenButton page="privacy-accessibility">Open</OpenButton>
+            )
+          }
+        >
+          Hears the dictation shortcut in every app and pastes your words where the cursor is.
+        </Row>
         <Row label="Microphone" control={<OpenButton page="privacy-microphone">Open</OpenButton>}>
-          Records you, the <Track speaker="me" /> track.
+          Hears your dictations and records you, the <Track speaker="me" /> track.
         </Row>
         <Row label="System Audio Recording" control={<OpenButton page="privacy-system-audio">Open</OpenButton>}>
           Records the call, the <Track speaker="them" /> track.

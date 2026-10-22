@@ -40,8 +40,8 @@ enum TrackKind: String, Codable, CaseIterable, Sendable {
     case mic
     case system
 
-    /// Speaker label used in transcripts.
-    var speaker: String { self == .mic ? "me" : "them" }
+    /// Who speaks on the track.
+    var speaker: Speaker { self == .mic ? .me : .them }
 
     /// Human-readable name for menu and notification text.
     var label: String { self == .mic ? "microphone" : "system audio" }
@@ -84,9 +84,15 @@ struct CapturePolicy: Sendable {
     static let production = CapturePolicy()
 }
 
+/// Who speaks on a track: `me` on the microphone, `them` on system audio. The
+/// raw values are the JSON the app reads (`Speaker` in packages/contracts).
+enum Speaker: String, Codable, Sendable {
+    case me, them
+}
+
 /// Live transport state of one track. `recovered` is deliberately absent:
 /// it is a historical/final result, not a live state — a successful restart
-/// returns the track to `healthy` with `didRecover` retained.
+/// returns the track to `healthy`, and its interruption records the recovery.
 enum CaptureState: Equatable, Sendable {
     case starting
     case healthy
@@ -183,11 +189,9 @@ struct TrackHealthMachine: Sendable {
         case declareDegraded
     }
 
-    let kind: TrackKind
     let policy: CapturePolicy
 
     private(set) var state: CaptureState = .starting
-    private(set) var didRecover = false
     private(set) var interruptions: [Interruption] = []
     private(set) var warnings: [String] = []
     /// True while the silence diagnostic is active; cleared by signal.
@@ -206,8 +210,7 @@ struct TrackHealthMachine: Sendable {
     /// watchdog ticks cannot start a second concurrent recovery.
     private var restartInFlight = false
 
-    init(kind: TrackKind, policy: CapturePolicy, startMs: Int) {
-        self.kind = kind
+    init(policy: CapturePolicy, startMs: Int) {
         self.policy = policy
         self.segmentStartMs = startMs
     }
@@ -394,7 +397,6 @@ struct TrackHealthMachine: Sendable {
 
     private mutating func closeEpisode(recoveredAtMs: Int) {
         episodeAttempts = nil
-        didRecover = true
         if var open = interruptions.last, open.recovered_offset_ms == nil {
             open.recovered_offset_ms = recoveredAtMs
             interruptions[interruptions.count - 1] = open

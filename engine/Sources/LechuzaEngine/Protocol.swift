@@ -4,8 +4,8 @@ import Foundation
 // stdout (events), each with a "type". The TypeScript side of this contract is
 // packages/contracts/src/engine.ts; packages/contracts/fixtures/engine-protocol.json
 // holds one example of every message, and both sides' tests decode it.
-// Types are grouped by feature (meeting.*, model.*, transcription.*), so
-// dictation.* can join without touching the rest.
+// Types are grouped by feature: meeting.*, model.*, transcription.* and
+// dictation.*.
 
 /// What the app asks the engine to do.
 enum EngineCommand: Equatable, Sendable {
@@ -18,6 +18,12 @@ enum EngineCommand: Equatable, Sendable {
     case transcriptionStart(dir: String)
     /// Download the speech model if it is missing.
     case modelPrepare
+    /// Listen for `hotkey` in every app and keep the speech model loaded.
+    case dictationConfigure(hotkey: Hotkey)
+    /// Start hands-free dictation (the Flow bar was clicked).
+    case dictationStart
+    /// Stop hands-free dictation and insert the text.
+    case dictationStop
 }
 
 /// What the engine tells the app.
@@ -39,6 +45,13 @@ enum EngineEvent: Equatable, Sendable {
     case transcriptionStarted(dir: String)
     case transcriptionDone(dir: String)
     case transcriptionFailed(dir: String, message: String)
+    case dictationState(phase: DictationPhase)
+    /// Microphone RMS (0–1), about ten times a second while listening.
+    case dictationLevel(level: Double)
+    /// The words were pasted; `durationMs` is how long the user spoke.
+    case dictationDone(text: String, startedAt: String, durationMs: Int)
+    /// Nothing was heard, or the words could not be pasted.
+    case dictationFailed(message: String)
     /// A line the engine could not act on.
     case error(message: String)
 }
@@ -47,16 +60,24 @@ enum ModelPhase: String, Codable, Sendable {
     case listing, downloading, compiling
 }
 
+/// idle → listening (key held) | handsFree (double-pressed) → transcribing → idle
+enum DictationPhase: String, Codable, Sendable {
+    case idle, listening, handsFree, transcribing
+}
+
 extension EngineCommand: Codable {
     enum Kind: String, Codable, CaseIterable {
         case meetingStart = "meeting.start"
         case meetingStop = "meeting.stop"
         case transcriptionStart = "transcription.start"
         case modelPrepare = "model.prepare"
+        case dictationConfigure = "dictation.configure"
+        case dictationStart = "dictation.start"
+        case dictationStop = "dictation.stop"
     }
 
     private enum Key: String, CodingKey {
-        case type, root, dir
+        case type, root, dir, hotkey
     }
 
     var kind: Kind {
@@ -65,6 +86,9 @@ extension EngineCommand: Codable {
         case .meetingStop: .meetingStop
         case .transcriptionStart: .transcriptionStart
         case .modelPrepare: .modelPrepare
+        case .dictationConfigure: .dictationConfigure
+        case .dictationStart: .dictationStart
+        case .dictationStop: .dictationStop
         }
     }
 
@@ -75,6 +99,9 @@ extension EngineCommand: Codable {
         case .meetingStop: self = .meetingStop
         case .transcriptionStart: self = .transcriptionStart(dir: try c.decode(String.self, forKey: .dir))
         case .modelPrepare: self = .modelPrepare
+        case .dictationConfigure: self = .dictationConfigure(hotkey: try c.decode(Hotkey.self, forKey: .hotkey))
+        case .dictationStart: self = .dictationStart
+        case .dictationStop: self = .dictationStop
         }
     }
 
@@ -84,7 +111,8 @@ extension EngineCommand: Codable {
         switch self {
         case .meetingStart(let root): try c.encode(root, forKey: .root)
         case .transcriptionStart(let dir): try c.encode(dir, forKey: .dir)
-        case .meetingStop, .modelPrepare: break
+        case .dictationConfigure(let hotkey): try c.encode(hotkey, forKey: .hotkey)
+        case .meetingStop, .modelPrepare, .dictationStart, .dictationStop: break
         }
     }
 }
@@ -103,11 +131,16 @@ extension EngineEvent: Codable {
         case transcriptionStarted = "transcription.started"
         case transcriptionDone = "transcription.done"
         case transcriptionFailed = "transcription.failed"
+        case dictationState = "dictation.state"
+        case dictationLevel = "dictation.level"
+        case dictationDone = "dictation.done"
+        case dictationFailed = "dictation.failed"
         case error
     }
 
     private enum Key: String, CodingKey {
-        case type, modelDownloaded, dir, startedAt, mic, system, status, message, phase, fraction
+        case type, modelDownloaded, dir, startedAt, mic, system, status, message, phase, fraction, level, text,
+            durationMs
     }
 
     var kind: Kind {
@@ -124,6 +157,10 @@ extension EngineEvent: Codable {
         case .transcriptionStarted: .transcriptionStarted
         case .transcriptionDone: .transcriptionDone
         case .transcriptionFailed: .transcriptionFailed
+        case .dictationState: .dictationState
+        case .dictationLevel: .dictationLevel
+        case .dictationDone: .dictationDone
+        case .dictationFailed: .dictationFailed
         case .error: .error
         }
     }
@@ -150,6 +187,13 @@ extension EngineEvent: Codable {
         case .transcriptionStarted: self = .transcriptionStarted(dir: try string(.dir))
         case .transcriptionDone: self = .transcriptionDone(dir: try string(.dir))
         case .transcriptionFailed: self = .transcriptionFailed(dir: try string(.dir), message: try string(.message))
+        case .dictationState: self = .dictationState(phase: try c.decode(DictationPhase.self, forKey: .phase))
+        case .dictationLevel: self = .dictationLevel(level: try c.decode(Double.self, forKey: .level))
+        case .dictationDone:
+            self = .dictationDone(
+                text: try string(.text), startedAt: try string(.startedAt),
+                durationMs: try c.decode(Int.self, forKey: .durationMs))
+        case .dictationFailed: self = .dictationFailed(message: try string(.message))
         case .error: self = .error(message: try string(.message))
         }
     }
@@ -177,8 +221,16 @@ extension EngineEvent: Codable {
         case .transcriptionFailed(let dir, let message):
             try c.encode(dir, forKey: .dir)
             try c.encode(message, forKey: .message)
+        case .dictationState(let phase):
+            try c.encode(phase, forKey: .phase)
+        case .dictationLevel(let level):
+            try c.encode(level, forKey: .level)
+        case .dictationDone(let text, let startedAt, let durationMs):
+            try c.encode(text, forKey: .text)
+            try c.encode(startedAt, forKey: .startedAt)
+            try c.encode(durationMs, forKey: .durationMs)
         case .meetingWarning(let message), .meetingFailed(let message), .modelFailed(let message),
-            .error(let message):
+            .dictationFailed(let message), .error(let message):
             try c.encode(message, forKey: .message)
         case .modelReady:
             break

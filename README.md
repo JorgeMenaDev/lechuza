@@ -10,7 +10,7 @@ Why "Lechuza"? It's named after the Spanish children's song *La lechuza*, where 
 
 ## Features
 
-- **Dictation.** Double-press `fn` to start dictating, and press it once to stop. Or hold `fn` to talk: dictation runs while it's held and stops on release. Both work at any time, with no setting.
+- **Dictation.** Double-press `fn` to start dictating, and press it once to stop. Or hold `fn` to talk: dictation runs while it's held and stops on release. Both work at any time, with no setting. Esc cancels. Prefer another key? Pick right Option, right Command or Control + Option in Settings.
 - **Meeting recording.** Start a meeting from the menu bar. Lechuza records your microphone (`me`) and the call's audio (`them`) as separate tracks, then writes a timestamped `me` / `them` transcript.
 - **Meetings dashboard.** Replay any meeting, follow the transcript as it plays, click a line to jump there, and copy the whole transcript in one click.
 - **On-device.** Transcription runs on your Mac with Parakeet, in English, Spanish and 23 other European languages.
@@ -20,6 +20,20 @@ Why "Lechuza"? It's named after the Spanish children's song *La lechuza*, where 
 ## Status
 
 In development. The v1 plan is [issue #1](https://github.com/JorgeMenaDev/lechuza/issues/1).
+
+## Dictation
+
+Put the cursor in any text field, in any app, and dictate:
+
+- **Hold** the key, speak, and let go.
+- **Double-press** it to talk hands-free, then press it once more (or click ■ on the Flow bar) to stop.
+- **Esc** throws the dictation away, while you talk or while it's being transcribed.
+
+Your words are pasted where the cursor is, about a second after you stop. Lechuza puts them on the clipboard, presses ⌘V for you, and once the app has taken them puts back what the clipboard held before. If you switch to another app before they're ready, Lechuza doesn't paste them: they wait on Home. It boosts quiet input, so a whisper transcribes like normal speech.
+
+The **Flow bar** is a small pill at the bottom of the screen, on every Space and over full-screen apps. It never takes focus from the app you're typing in. Point at it and click to start dictating. While you talk it shows a live waveform, then dots while Parakeet transcribes. A red edge means something went wrong; point at it to read what. A short sound plays when dictation starts and stops (turn it off in Settings).
+
+Home lists every dictation next to your meetings, newest first, with a button to copy it (**Show more** reaches older ones), and adds up the words you've dictated and your words per minute. They are kept in `dictations.jsonl` in Lechuza's data folder (`~/Library/Application Support/Lechuza`).
 
 ## Meetings
 
@@ -47,15 +61,24 @@ Each meeting is a plain folder in `~/Documents/Lechuza/Meetings/<yyyy-MM-dd-HHmm
 | `recording.json` | While recording, the tracks so far. A crash leaves it behind, and the next launch recovers the meeting from it |
 | `meta.json` | Start, length, track health and your title |
 
-Without headphones, your microphone also hears the other side. When a `me` line repeats what `them` said at that moment, the transcript leaves it out, so each line appears once.
+Without headphones, your microphone also hears the other side. When a `me` line of three words or more repeats what `them` said at that moment, the transcript leaves it out, so each line appears once. A short reply such as "Thursday." always stays.
 
 ## Home and Settings
 
-Home greets you, lists your recent meetings by day, and adds up how many you've had and how long you've recorded. **Settings**, at the bottom of the sidebar, has the theme, your microphone, the speech model, the meetings folder, permissions and the version. The theme follows your Mac's appearance, or pick Light or Dark there or with the moon at the top right.
+Home greets you, lists your recent meetings and dictations by day, and adds up the words you've dictated, your words per minute, how many meetings you've had and how long you've recorded. **Settings**, at the bottom of the sidebar, has the dictation key, sounds, the theme, your microphone, the speech model, the meetings folder, permissions and the version. The theme follows your Mac's appearance, or pick Light or Dark there or with the moon at the top right.
 
 ## Permissions
 
-Lechuza asks for three permissions, all in its own name: **Documents** at first launch (meetings are saved there), then **Microphone** and **System Audio Recording** at the first meeting. If you said no, allow them in System Settings → Privacy & Security, then start a new meeting.
+Lechuza asks for these permissions, all in its own name:
+
+- **Documents** at first launch: meetings are saved there.
+- **Accessibility** for dictation, so Lechuza can hear the dictation key in every app and paste your words. Home shows a button for it until it's allowed.
+- **Microphone** at the first meeting or dictation.
+- **System Audio Recording** at the first meeting.
+
+If you said no, allow them in System Settings → Privacy & Security, then try again.
+
+With `fn` as the dictation key, set **Press 🌐 key to** to **Do Nothing** in System Settings → Keyboard, or macOS also acts on the key (emoji picker, input sources or its own dictation). Lechuza tells you when it isn't.
 
 Lechuza needs macOS 15 or later on Apple silicon.
 
@@ -90,14 +113,18 @@ apps/desktop           Electron main process
   engineProcess.ts       Spawns lechuza-engine and speaks the protocol
   library.ts             Meeting folders on disk: list, rename, transcript
   mediaProtocol.ts       lechuza-media:// with byte ranges, so the player can seek
-  settings.ts            Your settings (the theme), saved in the app's data folder
-  main.ts                Menu bar, IPC, wiring
+  dictation.ts           Dictation state: phase, errors, Accessibility and the 🌐 key check
+  dictationHistory.ts    Every dictation, in dictations.jsonl, with word and wpm totals
+  settings.ts            Your settings (dictation key, sounds, theme), saved in the app's data folder
+  main.ts                Menu bar, Flow bar window, IPC, wiring
 apps/web               React 19 + Vite + Tailwind 4; one bundle, #/surface picks the window
   surfaces/Main.tsx      The main window: sidebar, pages and the Settings dialog
+  surfaces/FlowBar.tsx   The Flow bar, alone in its own transparent window
   pages/                 Home, Meetings, one meeting, Settings
   index.css              Every style and colour, light and dark, by class name
 engine/                Swift package: the lechuza-engine helper
   Audio/                 Microphone (AVAudioEngine) and system audio (Core Audio process tap)
+  Dictation/             The hotkey (event tap and gesture machine), capture, loudness and paste
   RecordingSession.swift Both tracks on one clock, with capture health in meta.json
   Mixer.swift            Both tracks to meeting.m4a (AVFoundation)
   Transcription/         Parakeet v3 through FluidAudio; me / them transcript
@@ -110,6 +137,13 @@ A meeting, step by step:
 3. **Stop** sends `meeting.stop`. The engine finishes the tracks, writes `meta.json` and mixes `meeting.m4a`.
 4. The app queues `transcription.start`. The engine downloads the model if needed, transcribes each track, and writes the transcript.
 5. The main process broadcasts every change to the window, which renders it.
+
+A dictation, step by step:
+
+1. Main sends `dictation.configure` with your key. The engine watches the keyboard through an event tap (this needs Accessibility) and keeps Parakeet loaded.
+2. On a press, the engine opens its own microphone capture, separate from any meeting, and streams `dictation.level` to the Flow bar.
+3. On release (or the hands-free stop) it notes the app in front, boosts quiet audio and transcribes it. If that app is still in front, it pastes the text with ⌘V and puts your clipboard back 2 seconds later.
+4. It sends `dictation.done`. Main saves it to the history and broadcasts the new state.
 
 ## Credits
 

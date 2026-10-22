@@ -40,12 +40,12 @@ final class TranscriptTests: XCTestCase {
             TranscriptSegment(start: 0.5, end: 2.0, text: "hello"),
             TranscriptSegment(start: 3.0, end: 4.5, text: "world"),
         ]
-        let shifted = Transcript.shifted(raw, speaker: "me", offsetMs: 1_691_120)
+        let shifted = Transcript.shifted(raw, speaker: .me, offsetMs: 1_691_120)
         XCTAssertEqual(
             shifted,
             [
-                Transcript.Segment(speaker: "me", start_ms: 1_691_620, end_ms: 1_693_120, text: "hello"),
-                Transcript.Segment(speaker: "me", start_ms: 1_694_120, end_ms: 1_695_620, text: "world"),
+                Transcript.Segment(speaker: .me, start_ms: 1_691_620, end_ms: 1_693_120, text: "hello"),
+                Transcript.Segment(speaker: .me, start_ms: 1_694_120, end_ms: 1_695_620, text: "world"),
             ])
     }
 
@@ -55,18 +55,18 @@ final class TranscriptTests: XCTestCase {
         var merged: [Transcript.Segment] = []
         merged += Transcript.shifted(
             [TranscriptSegment(start: 1, end: 9, text: "before the gap")],
-            speaker: "me", offsetMs: 0
+            speaker: .me, offsetMs: 0
         )
         merged += Transcript.shifted(
             [TranscriptSegment(start: 0, end: 5, text: "after the gap")],
-            speaker: "me", offsetMs: 25000
+            speaker: .me, offsetMs: 25000
         )
         merged += Transcript.shifted(
             [
                 TranscriptSegment(start: 12, end: 14, text: "they talk"),
                 TranscriptSegment(start: 31, end: 33, text: "they answer"),
             ],
-            speaker: "them", offsetMs: 0
+            speaker: .them, offsetMs: 0
         )
         merged.sort { $0.start_ms < $1.start_ms }
 
@@ -74,7 +74,7 @@ final class TranscriptTests: XCTestCase {
         XCTAssertEqual(merged[2].start_ms, 25000)
     }
 
-    private func line(_ speaker: String, _ startMs: Int, _ endMs: Int, _ text: String) -> Transcript.Segment {
+    private func line(_ speaker: LechuzaEngine.Speaker, _ startMs: Int, _ endMs: Int, _ text: String) -> Transcript.Segment {
         Transcript.Segment(speaker: speaker, start_ms: startMs, end_ms: endMs, text: text)
     }
 
@@ -82,10 +82,10 @@ final class TranscriptTests: XCTestCase {
     /// sentence through the speakers about 0.2 s later, one word misheard.
     func testDropsMeLinesThatRepeatThemAtTheSameTime() {
         let segments = [
-            line("them", 3471, 6751, "The quarterly budget review moves to Thursday afternoon."),
-            line("me", 3581, 6941, "The quarterly budget review moves to Thursday afternoon."),
-            line("them", 6751, 9391, "Please send the slides to Maria before lunch."),
-            line("me", 6941, 9581, "Please send us slides to Maria before lunch."),
+            line(.them, 3471, 6751, "The quarterly budget review moves to Thursday afternoon."),
+            line(.me, 3581, 6941, "The quarterly budget review moves to Thursday afternoon."),
+            line(.them, 6751, 9391, "Please send the slides to Maria before lunch."),
+            line(.me, 6941, 9581, "Please send us slides to Maria before lunch."),
         ]
         XCTAssertEqual(Transcript.removingEcho(from: segments), [segments[0], segments[2]])
     }
@@ -93,25 +93,34 @@ final class TranscriptTests: XCTestCase {
     /// The mic's transcript can break sentences differently from theirs.
     func testDropsAnEchoThatSpansTwoOfTheirLines() {
         let segments = [
-            line("them", 0, 3000, "The budget review moves to Thursday."),
-            line("them", 3000, 6000, "Please send the slides."),
-            line("me", 1500, 6200, "Moves to Thursday please send the slides."),
+            line(.them, 0, 3000, "The budget review moves to Thursday."),
+            line(.them, 3000, 6000, "Please send the slides."),
+            line(.me, 1500, 6200, "Moves to Thursday please send the slides."),
         ]
         XCTAssertEqual(Transcript.removingEcho(from: segments), Array(segments[0..<2]))
     }
 
     func testKeepsWhatYouSayWhileTheyTalk() {
         let segments = [
-            line("them", 3000, 9000, "The quarterly budget review moves to Thursday afternoon."),
-            line("me", 4000, 6000, "Sorry, I can't make Thursday."),
+            line(.them, 3000, 9000, "The quarterly budget review moves to Thursday afternoon."),
+            line(.me, 4000, 6000, "Sorry, I can't make Thursday."),
+        ]
+        XCTAssertEqual(Transcript.removingEcho(from: segments), segments)
+    }
+
+    /// A short answer can repeat their word and still be yours, even with headphones.
+    func testKeepsAShortReplyThatRepeatsTheirWord() {
+        let segments = [
+            line(.them, 0, 3000, "Shall we move the review to Thursday?"),
+            line(.me, 2900, 3500, "Thursday."),
         ]
         XCTAssertEqual(Transcript.removingEcho(from: segments), segments)
     }
 
     func testKeepsTheirWordsWhenYouRepeatThemLater() {
         let segments = [
-            line("them", 1000, 2500, "We meet on Thursday."),
-            line("me", 4000, 5500, "We meet on Thursday."),
+            line(.them, 1000, 2500, "We meet on Thursday."),
+            line(.me, 4000, 5500, "We meet on Thursday."),
         ]
         XCTAssertEqual(Transcript.removingEcho(from: segments), segments)
     }
@@ -120,8 +129,8 @@ final class TranscriptTests: XCTestCase {
         let transcript = Transcript(
             engine: "parakeet", model: "test", created_at: "2026-10-22T14:05:09Z",
             segments: [
-                Transcript.Segment(speaker: "me", start_ms: 5000, end_ms: 6000, text: "Hi."),
-                Transcript.Segment(speaker: "them", start_ms: 3_725_000, end_ms: 3_726_000, text: "Hola."),
+                Transcript.Segment(speaker: .me, start_ms: 5000, end_ms: 6000, text: "Hi."),
+                Transcript.Segment(speaker: .them, start_ms: 3_725_000, end_ms: 3_726_000, text: "Hola."),
             ]
         )
         let complete = transcript.rendered(title: "2026-10-22-1405", captureStatus: .complete)

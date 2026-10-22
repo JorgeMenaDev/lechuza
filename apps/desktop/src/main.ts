@@ -9,7 +9,9 @@ import {
   Menu,
   nativeTheme,
   protocol,
+  screen,
   shell,
+  systemPreferences,
   Tray,
   type MenuItemConstructorOptions,
 } from "electron";
@@ -19,6 +21,7 @@ import {
   MEDIA_SCHEME,
   formatClock,
   formatTranscript,
+  isDictationEvent,
   type AppInfo,
   type AppState,
   type ExternalPage,
@@ -26,19 +29,22 @@ import {
   type Settings,
 } from "@lechuza/contracts";
 
+import { Dictations } from "./dictation.ts";
+import { DictationHistory } from "./dictationHistory.ts";
 import { EngineProcess } from "./engineProcess.ts";
 import { MeetingLibrary } from "./library.ts";
 import { handleMediaRequest } from "./mediaProtocol.ts";
 import { Meetings } from "./meetings.ts";
-import { isTheme, loadSettings, saveSettings } from "./settings.ts";
+import { isHotkey, isTheme, loadSettings, saveSettings } from "./settings.ts";
 import { createTrayIcon } from "./trayIcon.ts";
-import { createMainWindow, windowBackground } from "./windows.ts";
+import { createFlowBarWindow, createMainWindow, placeFlowBar, windowBackground } from "./windows.ts";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
 ]);
 
 let mainWindow: BrowserWindow | null = null;
+let flowBar: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let trayTimer: NodeJS.Timeout | null = null;
 let quitting = false;
@@ -92,6 +98,8 @@ const EXTERNAL_PAGES: Record<ExternalPage, string> = {
   "privacy-microphone": "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Microphone",
   "privacy-system-audio": "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture",
   "privacy-documents": "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_FilesAndFolders",
+  "privacy-accessibility": "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Accessibility",
+  "keyboard-settings": "x-apple.systempreferences:com.apple.Keyboard-Settings.extension",
 };
 
 function isExternalPage(value: unknown): value is ExternalPage {
@@ -108,10 +116,21 @@ function firstName(): Promise<string | null> {
   );
 }
 
-// The settings, applied: the theme drives prefers-color-scheme in every window.
+// Whether macOS's "Press 🌐 key to" setting is "Do Nothing" (AppleFnUsageType 0).
+// Unset means the default, which does act on the key.
+function globeDoesNothing(): Promise<boolean> {
+  return new Promise((resolve) =>
+    execFile("defaults", ["read", "com.apple.HIToolbox", "AppleFnUsageType"], (error, stdout) =>
+      resolve(!error && stdout.trim() === "0"),
+    ),
+  );
+}
+
+// The settings, applied: the theme drives prefers-color-scheme in every
+// window, and the main window's background. The Flow bar stays transparent.
 function applySettings(settings: Settings): void {
   nativeTheme.themeSource = settings.theme;
-  for (const win of BrowserWindow.getAllWindows()) win.setBackgroundColor(windowBackground());
+  mainWindow?.setBackgroundColor(windowBackground());
 }
 
 // The settings in use and the file they're saved to.
@@ -122,9 +141,11 @@ interface SettingsStore {
 
 function registerIpc(
   meetings: Meetings,
+  dictations: Dictations,
   library: MeetingLibrary,
   settings: SettingsStore,
   appState: (state: MeetingsState) => AppState,
+  publish: () => void,
 ): void {
   // Renderer arguments arrive untyped; anything but a string becomes "".
   const text = (value: unknown) => (typeof value === "string" ? value : "");
@@ -161,6 +182,33 @@ function registerIpc(
     meetings.publish();
     await saveSettings(settings.file, settings.current);
   });
+  ipcMain.handle(IPC.setHotkey, async (_event, hotkey: unknown) => {
+    if (!isHotkey(hotkey)) return;
+    settings.current = { ...settings.current, hotkey };
+    dictations.configure(hotkey);
+    await saveSettings(settings.file, settings.current);
+  });
+  ipcMain.handle(IPC.setSounds, async (_event, on: unknown) => {
+    settings.current = { ...settings.current, sounds: on === true };
+    publish();
+    await saveSettings(settings.file, settings.current);
+  });
+  ipcMain.handle(IPC.startDictation, () => dictations.start());
+  ipcMain.handle(IPC.stopDictation, () => dictations.stop());
+  ipcMain.handle(IPC.copyDictation, async (_event, id: unknown) => {
+    const dictation = await dictations.history.find(text(id));
+    if (dictation) clipboard.writeText(dictation.text);
+  });
+  ipcMain.handle(IPC.getDictations, (_event, count: unknown) =>
+    dictations.history.newest(typeof count === "number" && Number.isInteger(count) && count > 0 ? count : 0),
+  );
+  ipcMain.handle(IPC.requestAccessibility, () => {
+    systemPreferences.isTrustedAccessibilityClient(true);
+  });
+  // Over the pill the Flow bar takes clicks; elsewhere they fall through to the app below.
+  ipcMain.handle(IPC.setFlowBarHover, (_event, hover: unknown) => {
+    flowBar?.setIgnoreMouseEvents(hover !== true, { forward: true });
+  });
   ipcMain.handle(IPC.revealMeetingsFolder, () => shell.openPath(library.root));
   ipcMain.handle(IPC.openExternal, async (_event, page: unknown) => {
     if (isExternalPage(page)) await shell.openExternal(EXTERNAL_PAGES[page]);
@@ -177,28 +225,66 @@ void app.whenReady().then(async () => {
     app.getLocale(),
   );
   const info: AppInfo = { version: app.getVersion(), meetingsDir: library.root, firstName: await firstName() };
-  // Windows get the meeting state with the settings and app info added.
-  const appState = (state: MeetingsState): AppState => ({ ...state, settings: settings.current, info });
+  const history = await DictationHistory.load(path.join(app.getPath("userData"), "dictations.jsonl"));
+  // Windows get the meeting state with dictation, the settings and app info added.
+  const appState = (state: MeetingsState): AppState => ({
+    ...state,
+    dictation: dictations.state(),
+    settings: settings.current,
+    info,
+  });
+  // The latest meeting state, so a dictation change can be broadcast without reading the disk.
+  let meetingsState: MeetingsState | null = null;
+  const publish = () => meetingsState && broadcast(IPC.state, appState(meetingsState));
   // Packaged, the engine sits in Contents/Resources; `bun run dev` points at the Swift build.
   const engine = new EngineProcess(process.env.LECHUZA_ENGINE ?? path.join(process.resourcesPath, "lechuza-engine"), {
-    onEvent: (event) => void meetings.handle(event),
+    onEvent: (event) => {
+      if (isDictationEvent(event)) return void dictations.handle(event);
+      if (event.type === "ready") dictations.configure();
+      void meetings.handle(event);
+    },
     onExit: (ran) => {
       void meetings.engineExited();
+      dictations.engineExited();
       // An engine that never got going (a missing binary) would only fail again.
       if (ran && !quitting) setTimeout(() => engine.start(), 1000);
     },
   });
   const meetings = new Meetings(library, engine, {
     onState: (state) => {
+      meetingsState = state;
       broadcast(IPC.state, appState(state));
       syncTray(state);
     },
     onLevels: (levels) => broadcast(IPC.levels, levels),
   });
+  const dictations = new Dictations(history, engine, settings.current.hotkey, {
+    onState: () => {
+      // A dictation shows on the screen with the pointer.
+      const phase = dictations.state().phase;
+      if (flowBar && (phase === "listening" || phase === "handsFree")) placeFlowBar(flowBar);
+      publish();
+    },
+    onLevel: (level) => flowBar?.webContents.send(IPC.dictationLevel, level),
+  });
+  // Accessibility is granted in System Settings, so it is polled until it is;
+  // the 🌐 key setting is read again whenever a Lechuza window is focused.
+  const refreshMac = async () =>
+    dictations.setMac({
+      accessibility: systemPreferences.isTrustedAccessibilityClient(false),
+      globeDoesNothing: await globeDoesNothing(),
+    });
+  await refreshMac();
+  setInterval(() => {
+    if (!dictations.state().accessibility) dictations.setMac({ accessibility: systemPreferences.isTrustedAccessibilityClient(false) });
+  }, 2000);
+  app.on("browser-window-focus", () => void refreshMac());
 
   protocol.handle(MEDIA_SCHEME, (request) => handleMediaRequest(library, request));
-  registerIpc(meetings, library, settings, appState);
+  registerIpc(meetings, dictations, library, settings, appState, publish);
   engine.start();
+  flowBar = createFlowBarWindow();
+  screen.on("display-metrics-changed", () => flowBar && placeFlowBar(flowBar));
 
   tray = new Tray(createTrayIcon());
   tray.setToolTip("Lechuza");

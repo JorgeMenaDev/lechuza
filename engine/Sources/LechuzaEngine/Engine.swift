@@ -14,6 +14,8 @@ final class Engine {
     private var starting = false
     private var levels: Task<Void, Never>?
     private var download: Task<Void, Error>?
+    private lazy var dictation = Dictation(
+        emit: emit, speech: ParakeetSpeech(downloadModel: { [weak self] in try await self?.downloadModel() }))
 
     init(emit: @escaping @Sendable (EngineEvent) -> Void) {
         self.emit = emit
@@ -40,6 +42,9 @@ final class Engine {
         case .meetingStop: await stopMeeting()
         case .transcriptionStart(let dir): await transcribe(dir)
         case .modelPrepare: try? await downloadModel()
+        case .dictationConfigure(let hotkey): dictation.configure(hotkey: hotkey)
+        case .dictationStart: dictation.start()
+        case .dictationStop: dictation.stop()
         }
     }
 
@@ -218,7 +223,9 @@ final class EventOutput: Sendable {
 
 /// The executable's entry point: reads commands from stdin, writes events to
 /// stdout and logs to stderr. When stdin closes (the app quit), it saves any
-/// meeting in progress and exits.
+/// meeting in progress and exits. The main thread runs the main run loop,
+/// not just the main queue: AppKit delivers an app's read of a pasted
+/// dictation, and NSWorkspace the frontmost app, through it.
 public enum EngineMain {
     @MainActor
     public static func run() -> Never {
@@ -234,6 +241,7 @@ public enum EngineMain {
                 exit(0)
             }
         }
-        dispatchMain()
+        RunLoop.main.run()
+        fatalError("the main run loop returned")
     }
 }

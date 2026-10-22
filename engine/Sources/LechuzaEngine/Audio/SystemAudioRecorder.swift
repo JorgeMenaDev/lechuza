@@ -47,7 +47,6 @@ final class SystemAudioRecorder: TrackRecorder, @unchecked Sendable {
     private var procID: AudioDeviceIOProcID?
     private var segment: SegmentFile?
     private var routeListener: AudioObjectPropertyListenerBlock?
-    private var lastStats: SegmentStats?
 
     private static let routeProperties: [AudioObjectPropertySelector] = [
         kAudioHardwarePropertyDefaultOutputDevice,
@@ -100,16 +99,7 @@ final class SystemAudioRecorder: TrackRecorder, @unchecked Sendable {
     /// Stop the active segment and return its stats. Bounded: if Core Audio
     /// teardown wedges, gives up after 5 s rather than hanging the caller.
     func stop() -> SegmentStop {
-        let done = DispatchSemaphore(value: 0)
-        control.async {
-            self.lastStats = self.teardownLocked()
-            done.signal()
-        }
-        if done.wait(timeout: .now() + 5) == .timedOut {
-            FileHandle.standardError.write(Data("system teardown timed out\n".utf8))
-            return .timedOut(segment?.stats())
-        }
-        return .stopped(lastStats)
+        .bounded(on: control, track: "system", teardown: { self.teardownLocked() }, writtenSoFar: { segment?.stats() })
     }
 
     func telemetry() -> TelemetrySnapshot {

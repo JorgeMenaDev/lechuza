@@ -10,8 +10,9 @@ import Foundation
 /// One start/stop pair is one segment. The recorder observes route and engine
 /// configuration changes while a segment runs and reports them as health
 /// events; the session owns the recovery decision. All graph
-/// construction and teardown is serialized on a private control queue so the
-/// main actor never blocks on Core Audio.
+/// construction and teardown is serialized on a private control queue; stop
+/// waits at most 5 s for it, so a wedged Core Audio teardown can't hang the
+/// main actor.
 final class MicRecorder: TrackRecorder, @unchecked Sendable {
     enum RecorderError: Error, CustomStringConvertible {
         case alreadyRecording
@@ -36,7 +37,6 @@ final class MicRecorder: TrackRecorder, @unchecked Sendable {
     private var segment: SegmentFile?
     private var configObserver: NSObjectProtocol?
     private var routeListener: AudioObjectPropertyListenerBlock?
-    private var lastStats: SegmentStats?
 
     /// Start a new segment. Throws if one is already active.
     func start(url: URL, clock: SessionClock, onEvent: @escaping @Sendable (RecorderEvent) -> Void) throws {
@@ -50,16 +50,7 @@ final class MicRecorder: TrackRecorder, @unchecked Sendable {
     /// teardown wedges, gives up after 5 s and reports stats from telemetry
     /// rather than hanging the caller.
     func stop() -> SegmentStop {
-        let done = DispatchSemaphore(value: 0)
-        control.async {
-            self.lastStats = self.teardownLocked()
-            done.signal()
-        }
-        if done.wait(timeout: .now() + 5) == .timedOut {
-            FileHandle.standardError.write(Data("mic teardown timed out\n".utf8))
-            return .timedOut(segment?.stats())
-        }
-        return .stopped(lastStats)
+        .bounded(on: control, track: "mic", teardown: { self.teardownLocked() }, writtenSoFar: { segment?.stats() })
     }
 
     func telemetry() -> TelemetrySnapshot {

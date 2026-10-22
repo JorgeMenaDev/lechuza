@@ -39,14 +39,37 @@ enum SegmentStop: Sendable {
         case .stopped(let stats), .timedOut(let stats): stats
         }
     }
+
+    /// Runs a recorder's `teardown` on its control queue and waits at most
+    /// 5 s for it. A Core Audio teardown that wedges returns `.timedOut`
+    /// with `writtenSoFar()` instead of hanging the caller.
+    static func bounded(
+        on control: DispatchQueue, track: String,
+        teardown: @escaping @Sendable () -> SegmentStats?,
+        writtenSoFar: () -> SegmentStats?
+    ) -> SegmentStop {
+        let done = DispatchSemaphore(value: 0)
+        nonisolated(unsafe) var stats: SegmentStats?
+        control.async {
+            stats = teardown()
+            done.signal()
+        }
+        guard done.wait(timeout: .now() + 5) == .success else {
+            FileHandle.standardError.write(Data("\(track) teardown timed out\n".utf8))
+            return .timedOut(writtenSoFar())
+        }
+        return .stopped(stats)
+    }
 }
 
 /// The operations `RecordingSession` needs from a capture path. One start/stop
 /// pair is one segment; recovery stops the recorder and starts it again on the
 /// next numbered file. Concrete recorders serialize graph/tap construction and
-/// teardown on their own control queue so recovery never blocks the main actor
-/// on Core Audio, and the real-time callback only writes its own generation's
-/// immutable file. Fakes implement this for deterministic session tests.
+/// teardown on their own control queue. The session calls them from the main
+/// actor, which waits while a segment starts and at most 5 s while one stops;
+/// a teardown that wedges is never touched again. The real-time callback only
+/// writes its own generation's immutable file. Fakes implement this for
+/// deterministic session tests.
 protocol TrackRecorder: AnyObject {
     var kind: TrackKind { get }
 
@@ -113,9 +136,9 @@ final class SegmentFile: @unchecked Sendable {
         return nil
     }
 
-    /// Invalidate and release the file (CAF needs no finalization pass), then
-    /// return the segment's final telemetry. After this returns, no callback
-    /// can touch the file.
+    /// Invalidate and release the file, which closes it (ADTS AAC needs no
+    /// trailer), then return the segment's final telemetry. After this
+    /// returns, no callback can touch the file.
     func finish() -> TelemetrySnapshot {
         lock.lock()
         defer { lock.unlock() }
