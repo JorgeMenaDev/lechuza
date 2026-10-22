@@ -200,4 +200,20 @@ final class DictationTests: XCTestCase {
         XCTAssertEqual(pasted, ["First."])
         XCTAssertEqual(pasteboard.string(forType: .string), "copied before")
     }
+
+    /// Once quitting, nothing starts a dictation or writes to the app (it may
+    /// be gone): a key, the Flow bar or a new key setting arriving late is
+    /// ignored.
+    func testAfterQuittingNothingStartsADictationOrWritesToTheApp() {
+        let dictation = dictation(hearing: ["Late."])
+        dictation.handle(.press, at: 0)
+        let written = events.all.count
+        dictation.quit()
+        XCTAssertTrue(microphones[0].stopped)
+        dictation.configure(hotkey: .rightOption)
+        dictation.start()
+        dictation.handle(.press, at: 5)
+        XCTAssertEqual(microphones.count, 1)
+        XCTAssertEqual(events.all.count, written)
+    }
 }
