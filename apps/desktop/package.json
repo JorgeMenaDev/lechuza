@@ -1,0 +1,55 @@
+{
+  "name": "@lechuza/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lechuza: on-device dictation and meeting transcripts for macOS.",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "build": "rm -rf dist-electron dist-renderer && bun build src/main.ts --outfile dist-electron/main.cjs --target node --format cjs --external electron && bun build src/preload.ts --outfile dist-electron/preload.cjs --target node --format cjs --external electron && cp -R ../web/dist dist-renderer",
+    "start": "electron .",
+    "dist": "electron-builder --mac --arm64",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@lechuza/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^24.3.0",
+    "electron": "41.10.7",
+    "electron-builder": "26.16.1"
+  },
+  "build": {
+    "appId": "com.andesphere.lechuza",
+    "productName": "Lechuza",
+    "files": [
+      "dist-electron/**",
+      "dist-renderer/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../engine/.build/release/lechuza-engine",
+        "to": "lechuza-engine"
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": "dmg",
+      "minimumSystemVersion": "15.0",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Lechuza records your microphone during meetings, so you can replay and read them. Audio never leaves this Mac.",
+        "NSAudioCaptureUsageDescription": "Lechuza records the call's audio, the other side of your meetings, so you can replay and read them. Audio never leaves this Mac.",
+        "NSDocumentsFolderUsageDescription": "Lechuza saves each meeting as plain files in Documents → Lechuza → Meetings."
+      },
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    }
+  },
+  "license": "MIT",
+  "author": "Jorge Mena",
+  "homepage": "https://github.com/JorgeMenaDev/lechuza"
+}

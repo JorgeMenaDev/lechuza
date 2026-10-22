@@ -1,0 +1,362 @@
+@import "tailwindcss";
+
+/* Every style in the app lives in this file. Components use the class names
+   below and no inline styling, so a restyle (ticket #3) only touches here.
+   Colours follow the macOS appearance. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --text: #171717;
+  --muted: #737373;
+  --border: #e5e5e5;
+  --hover: #f0f0f0;
+  --selected: #e8eefc;
+  --accent: #2f5fd0;
+  --danger: #c62828;
+  --warning-bg: #fff4d6;
+  --me: #2f5fd0;
+  --them: #9a3fb8;
+  --active-line: #fff3c4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111111;
+    --surface: #181818;
+    --text: #ededed;
+    --muted: #9a9a9a;
+    --border: #2a2a2a;
+    --hover: #222222;
+    --selected: #1f2a44;
+    --accent: #6d93f0;
+    --danger: #ef6b6b;
+    --warning-bg: #3a2f12;
+    --me: #7ea2f5;
+    --them: #d08ae6;
+    --active-line: #3b3416;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The window has no title bar; this strip is the drag area, clear of the traffic lights. */
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 52px;
+  padding: 0 16px 0 88px;
+  border-bottom: 1px solid var(--border);
+  -webkit-app-region: drag;
+}
+
+.titlebar-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.titlebar button {
+  -webkit-app-region: no-drag;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 500;
+  cursor: default;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+}
+
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+
+.btn-stop,
+.btn-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn-stop:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger);
+  filter: brightness(1.08);
+}
+
+.btn-quiet {
+  border-color: transparent;
+  background: transparent;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.banner > span {
+  flex: 1;
+}
+
+.banner-warning {
+  background: var(--warning-bg);
+}
+
+.banner-progress {
+  width: 160px;
+}
+
+.meetings {
+  display: grid;
+  flex: 1;
+  grid-template-columns: 300px 1fr;
+  min-height: 0;
+}
+
+.meeting-list {
+  overflow-y: auto;
+  padding: 8px;
+  border-right: 1px solid var(--border);
+}
+
+.meeting-list-empty {
+  padding: 24px 16px;
+  color: var(--muted);
+}
+
+.meeting-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-align: left;
+  cursor: default;
+}
+
+.meeting-row:hover {
+  background: var(--hover);
+}
+
+.meeting-row[aria-current="true"] {
+  background: var(--selected);
+}
+
+.meeting-row-title {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meeting-row-meta {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.meeting-row .badge {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+.badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge[data-state="recording"] {
+  background: var(--danger);
+  color: #fff;
+}
+
+.badge[data-state="failed"] {
+  color: var(--danger);
+}
+
+.meeting-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  padding: 20px 24px 0;
+  overflow-y: auto;
+}
+
+.meeting-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.meeting-title-button {
+  border-radius: 6px;
+  text-align: left;
+  cursor: text;
+}
+
+.meeting-title-button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.meeting-title-input {
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 20px;
+  font-weight: 600;
+  outline: none;
+}
+
+.meeting-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.meeting-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.meeting-status {
+  color: var(--muted);
+}
+
+.meeting-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--warning-bg);
+}
+
+.player {
+  width: 100%;
+}
+
+.levels {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}
+
+.meter {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.meter-track {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--hover);
+}
+
+.meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 80ms linear;
+}
+
+.transcript {
+  padding-bottom: 24px;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 52px 44px 1fr;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-align: left;
+  cursor: default;
+}
+
+.line:hover {
+  background: var(--hover);
+}
+
+.line[data-active="true"] {
+  background: var(--active-line);
+}
+
+.line-time {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.line-speaker {
+  font-weight: 600;
+}
+
+.line[data-speaker="me"] .line-speaker {
+  color: var(--me);
+}
+
+.line[data-speaker="them"] .line-speaker {
+  color: var(--them);
+}
