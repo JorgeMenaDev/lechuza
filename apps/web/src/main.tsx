@@ -18,7 +18,12 @@ function isSurface(value: string): value is Surface {
 }
 
 const requested = window.location.hash.replace(/^#\/?/, "").split("/")[0] ?? "";
-const Root = SURFACES[isSurface(requested) ? requested : "main"];
+const surface: Surface = isSurface(requested) ? requested : "main";
+// Set before the first paint: the Flow bar's window must be transparent even
+// while its state hasn't arrived (on first launch it waits for macOS to grant
+// Documents).
+document.documentElement.dataset.surface = surface;
+const Root = SURFACES[surface];
 const container = document.getElementById("root");
 if (container) {
   createRoot(container).render(
