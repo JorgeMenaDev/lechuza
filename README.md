@@ -47,7 +47,7 @@ Each meeting is a plain folder in `~/Documents/Lechuza/Meetings/<yyyy-MM-dd-HHmm
 | `recording.json` | While recording, the tracks so far. A crash leaves it behind, and the next launch recovers the meeting from it |
 | `meta.json` | Start, length, track health and your title |
 
-Lechuza has no echo cancellation yet: without headphones, your microphone also hears the other side, so some of their words appear under `me` too.
+Without headphones, your microphone also hears the other side. When a `me` line repeats what `them` said at that moment, the transcript leaves it out, so each line appears once.
 
 ## Home and Settings
 

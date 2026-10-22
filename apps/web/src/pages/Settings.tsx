@@ -184,7 +184,7 @@ function Audio() {
       </Row>
       <Row label="Call audio">
         Everything your Mac plays is recorded as <Track speaker="them" />. Without headphones your microphone hears
-        the call too, so some of their words appear under <Track speaker="me" />.
+        the call too, and the transcript leaves out <Track speaker="me" /> lines that repeat theirs.
       </Row>
     </Card>
   );

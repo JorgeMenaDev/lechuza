@@ -61,6 +61,7 @@ enum Transcriber {
             merged += Transcript.shifted(segments, speaker: input.speaker, offsetMs: input.offsetMs)
         }
         merged.sort { $0.start_ms < $1.start_ms }
+        merged = Transcript.removingEcho(from: merged)
 
         let transcript = Transcript(
             engine: ParakeetEngine.name,

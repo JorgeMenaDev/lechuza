@@ -31,6 +31,35 @@ struct Transcript: Codable, Equatable {
         }
     }
 
+    /// Without headphones the mic also hears the other side through the
+    /// speakers, so their words come back as a `me` line a moment later.
+    /// Drops a `me` line when most of its words are in the `them` lines it
+    /// overlaps. Talking over them keeps your line: most of its words are
+    /// yours. Apple's voice processing was tried first: at low speaker volume
+    /// it left the echo in and it turns the call down while it runs.
+    static func removingEcho(from segments: [Segment]) -> [Segment] {
+        // The echo reaches the mic about 0.1–0.3 s after the call plays it.
+        let lagMs = 500
+        let them = segments.filter { $0.speaker == TrackKind.system.speaker }
+            .map { (line: $0, words: words($0.text)) }
+        return segments.filter { line in
+            guard line.speaker == TrackKind.mic.speaker else { return true }
+            let heard = Set(
+                them.filter { $0.line.start_ms < line.end_ms && line.start_ms < $0.line.end_ms + lagMs }
+                    .flatMap(\.words))
+            let said = words(line.text)
+            return Double(said.filter(heard.contains).count) < Double(said.count) * 0.6
+        }
+    }
+
+    /// Lowercased words without accents or punctuation, for comparing what
+    /// two tracks heard.
+    private static func words(_ text: String) -> [String] {
+        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            .split { !$0.isLetter && !$0.isNumber }
+            .map(String.init)
+    }
+
     /// Write transcript.json and render transcript.md. Both writes are atomic
     /// (temp file + rename), so a partially written transcript never exists on
     /// disk — the app treats presence of transcript.json as "ready".
