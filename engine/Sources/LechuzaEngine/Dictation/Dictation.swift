@@ -185,6 +185,11 @@ final class Dictation {
         await paster.giveBack()
     }
 
+    /// The engine is quitting: put back a clipboard a paste still holds.
+    func quit() {
+        paster.giveBackNow()
+    }
+
     /// A dictation is done with, unless Esc threw it away first.
     private func finished(_ dictated: Dictated, failure: String?) {
         guard dictated.generation == generation else { return }

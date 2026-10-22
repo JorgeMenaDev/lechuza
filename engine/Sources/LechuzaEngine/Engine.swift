@@ -48,8 +48,10 @@ final class Engine {
         }
     }
 
-    /// Stdin closed (the app quit): save the meeting in progress, if any.
+    /// Stdin closed (the app quit): put back a clipboard a dictation still
+    /// holds, and save the meeting in progress, if any.
     func shutdown() async {
+        dictation.quit()
         if session != nil { await stopMeeting() }
     }
 

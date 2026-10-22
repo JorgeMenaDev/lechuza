@@ -73,4 +73,11 @@ final class Paster {
         held.restore()
         self.held = nil
     }
+
+    /// Puts the user's clipboard back now, without waiting out the hold: the
+    /// engine is quitting.
+    func giveBackNow() {
+        held?.restore()
+        held = nil
+    }
 }
