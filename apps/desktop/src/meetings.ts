@@ -87,7 +87,8 @@ export class Meetings {
     switch (event.type) {
       case "ready":
         this.model = event.modelDownloaded ? { state: "ready" } : { state: "missing" };
-        for (const id of await this.library.untranscribed()) this.enqueue(id);
+        // A meeting can start while the scan runs; its folder is no leftover.
+        for (const id of await this.library.untranscribed()) if (id !== this.#recording?.id) this.enqueue(id);
         break;
       case "meeting.started":
         this.#phase = "recording";

@@ -91,6 +91,16 @@ describe("Meetings", () => {
     expect(sent).toEqual([{ type: "transcription.start", dir: dir("2026-10-21-1500") }]);
   });
 
+  test("the launch scan leaves alone a meeting that started while it ran", async () => {
+    await fs.mkdir(dir("2026-10-22-1405"));
+    await fs.writeFile(path.join(dir("2026-10-22-1405"), "recording.json"), "{}");
+    meetings.start();
+    const scan = meetings.handle({ type: "ready", modelDownloaded: true });
+    await meetings.handle({ type: "meeting.started", dir: dir("2026-10-22-1405"), startedAt: "2026-10-22T14:05:09Z" });
+    await scan;
+    expect(sent).toEqual([{ type: "meeting.start", root }]);
+  });
+
   test("marks the transcription failed when the engine dies on it", async () => {
     await finishedSession("2026-10-22-0900");
     await meetings.handle({ type: "meeting.stopped", dir: dir("2026-10-22-0900"), status: "complete" });

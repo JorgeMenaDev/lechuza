@@ -128,8 +128,9 @@ final class Engine {
 
     private func transcribe(_ path: String) async {
         let dir = URL(fileURLWithPath: path, isDirectory: true)
-        let errorURL = dir.appendingPathComponent(Transcriber.errorFile)
-        try? FileManager.default.removeItem(at: errorURL)
+        // An error from an earlier attempt stays until this one succeeds
+        // (the transcriber removes it), so a crash mid-Retry still reads as
+        // failed.
         emit(.transcriptionStarted(dir: path))
         do {
             // A recording the engine never stopped (it crashed) has only its
@@ -149,7 +150,7 @@ final class Engine {
         } catch {
             await parakeet.release()
             Transcriber.log(dir, "transcription failed: \(error)")
-            try? Data("\(error)\n".utf8).write(to: errorURL, options: .atomic)
+            try? Transcriber.recordFailure(error, in: dir)
             emit(.transcriptionFailed(dir: path, message: "\(error)"))
         }
     }

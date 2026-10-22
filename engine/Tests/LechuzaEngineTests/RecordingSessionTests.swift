@@ -137,24 +137,34 @@ final class RecordingSessionTests: XCTestCase {
         XCTAssertTrue(meta.tracks[0].interruptions.isEmpty)
     }
 
+    /// The engine can die before the first watchdog tick, or right after a
+    /// restart. Each segment is in the manifest before its recorder starts,
+    /// at the time it started, or recovery never finds its audio.
     func testKeepsAManifestOfItsSegmentsUntilItStops() throws {
         func manifestURL(_ session: RecordingSession) -> URL {
             session.dir.appendingPathComponent(SessionMeta.manifestFile)
         }
-        func manifestFiles(_ session: RecordingSession) throws -> [String: [String]] {
+        // "file@start offset" for each track's segments.
+        func manifestSegments(_ session: RecordingSession) throws -> [String: [String]] {
             let manifest = try JSONDecoder().decode(SessionMeta.self, from: Data(contentsOf: manifestURL(session)))
-            return Dictionary(uniqueKeysWithValues: manifest.tracks.map { ($0.kind.rawValue, $0.segments.map(\.file)) })
+            return Dictionary(
+                uniqueKeysWithValues: manifest.tracks.map {
+                    ($0.kind.rawValue, $0.segments.map { "\($0.file)@\($0.start_offset_ms)" })
+                })
         }
+        time.ms = 200
         let session = try makeSession()
         try session.start()
-        tick(session, at: 1000)
-        XCTAssertEqual(try manifestFiles(session), ["mic": ["mic.aac"], "system": ["system.aac"]])
+        XCTAssertEqual(try manifestSegments(session), ["mic": ["mic.aac@200"], "system": ["system.aac@200"]])
 
-        // A restarted segment joins once it writes.
+        // Once a segment writes, its offset is its first write.
+        tick(session, at: 1000)
+        XCTAssertEqual(try manifestSegments(session), ["mic": ["mic.aac@500"], "system": ["system.aac@0"]])
+
+        // A restarted segment is listed before it writes.
         mic.writes(first: 500, last: 1000)
         tick(session, at: 6000, micStalled: true)
-        tick(session, at: 7000)
-        XCTAssertEqual(try manifestFiles(session)["mic"], ["mic.aac", "mic-002.aac"])
+        XCTAssertEqual(try manifestSegments(session)["mic"], ["mic.aac@500", "mic-002.aac@6000"])
 
         time.ms = 8000
         _ = session.stop()
@@ -288,5 +298,8 @@ final class RecordingSessionTests: XCTestCase {
         // System started first and must be torn down again.
         XCTAssertEqual(system.startedFiles, ["system.aac"])
         XCTAssertNil(system.stop().stats)  // already stopped by rollback
+        // No manifest, so launch doesn't recover a meeting that never started.
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: session.dir.appendingPathComponent(SessionMeta.manifestFile).path))
     }
 }

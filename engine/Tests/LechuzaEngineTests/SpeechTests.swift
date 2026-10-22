@@ -134,6 +134,24 @@ final class SpeechTests: XCTestCase {
         XCTAssertTrue(transcript.segments.map(\.text).joined().lowercased().contains("weather"), "\(transcript)")
     }
 
+    /// Retry on a meeting that partly failed. Until the retry succeeds the
+    /// folder must still read as failed: if the engine dies mid-Retry, the
+    /// partial transcript alone would look Ready.
+    func testARetryLeavesTheMeetingFailedUntilItSucceeds() async throws {
+        try Data("{}".utf8).write(to: dir.appendingPathComponent("transcript.json"))
+        let errorFile = dir.appendingPathComponent(Transcriber.errorFile)
+        try Data("Couldn't transcribe system.aac\n".utf8).write(to: errorFile)
+        let failedAtStart = EventLog()
+        let engine = Engine(emit: { event in
+            if case .transcriptionStarted = event, FileManager.default.fileExists(atPath: errorFile.path) {
+                failedAtStart.append(event)
+            }
+        })
+        await engine.run(.transcriptionStart(dir: dir.path))
+
+        XCTAssertEqual(failedAtStart.all, [.transcriptionStarted(dir: dir.path)])
+    }
+
     func testFailureLeavesItsReasonForTheApp() async throws {
         let events = EventLog()
         let engine = Engine(emit: events.append)

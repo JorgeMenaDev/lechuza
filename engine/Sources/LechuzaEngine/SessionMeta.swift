@@ -52,7 +52,7 @@ struct SessionMeta: Codable, Equatable, Sendable {
 
     static let fileName = "meta.json"
     /// Written while recording and replaced by meta.json on stop. A crash
-    /// leaves it behind, listing every segment that started writing.
+    /// leaves it behind, listing every segment the session started.
     static let manifestFile = "recording.json"
 
     /// Write meta.json (or the manifest) atomically so the app, which treats
