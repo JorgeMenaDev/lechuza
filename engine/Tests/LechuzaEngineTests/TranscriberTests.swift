@@ -68,6 +68,22 @@ final class TranscriberTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: errorFile.path))
     }
 
+    func testLeavesOutTheirWordsTheMicHeard() async throws {
+        let recognizer = FakeRecognizer(answers: [
+            "mic.aac": [TranscriptSegment(start: 3.6, end: 6.9, text: "The budget moves to Thursday.")],
+            "system.aac": [TranscriptSegment(start: 3.5, end: 6.8, text: "The budget moves to Thursday.")],
+        ])
+        let inputs = [
+            SessionMeta.TrackInput(file: "mic.aac", speaker: "me", offsetMs: 0),
+            SessionMeta.TrackInput(file: "system.aac", speaker: "them", offsetMs: 0),
+        ]
+        try await Transcriber.transcribe(dir, inputs: inputs, captureStatus: .complete, with: recognizer)
+
+        let transcript = try JSONDecoder().decode(
+            Transcript.self, from: Data(contentsOf: dir.appendingPathComponent("transcript.json")))
+        XCTAssertEqual(transcript.segments.map(\.speaker), ["them"])
+    }
+
     /// meta.json names a segment that isn't on disk: the meeting is missing
     /// audio, so it fails, keeping what the other segments said.
     func testAMissingSegmentFailsTheTranscriptionAndKeepsTheRest() async throws {
