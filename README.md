@@ -61,7 +61,7 @@ Each meeting is a plain folder in `~/Documents/Lechuza/Meetings/<yyyy-MM-dd-HHmm
 | `recording.json` | While recording, the tracks so far. A crash leaves it behind, and the next launch recovers the meeting from it |
 | `meta.json` | Start, length, track health and your title |
 
-Without headphones, your microphone also hears the other side. When a `me` line repeats what `them` said at that moment, the transcript leaves it out, so each line appears once.
+Without headphones, your microphone also hears the other side. When a `me` line of three words or more repeats what `them` said at that moment, the transcript leaves it out, so each line appears once. A short reply such as "Thursday." always stays.
 
 ## Home and Settings
 

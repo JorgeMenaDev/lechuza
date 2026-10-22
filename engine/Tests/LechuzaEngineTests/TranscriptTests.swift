@@ -108,6 +108,15 @@ final class TranscriptTests: XCTestCase {
         XCTAssertEqual(Transcript.removingEcho(from: segments), segments)
     }
 
+    /// A short answer can repeat their word and still be yours, even with headphones.
+    func testKeepsAShortReplyThatRepeatsTheirWord() {
+        let segments = [
+            line("them", 0, 3000, "Shall we move the review to Thursday?"),
+            line("me", 2900, 3500, "Thursday."),
+        ]
+        XCTAssertEqual(Transcript.removingEcho(from: segments), segments)
+    }
+
     func testKeepsTheirWordsWhenYouRepeatThemLater() {
         let segments = [
             line("them", 1000, 2500, "We meet on Thursday."),
