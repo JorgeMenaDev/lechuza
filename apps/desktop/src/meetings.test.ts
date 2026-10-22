@@ -99,4 +99,16 @@ describe("Meetings", () => {
     expect(meeting?.state).toBe("failed");
     expect(meeting?.error).toBe("The engine stopped while transcribing.");
   });
+
+  test("recovers from an engine death even when the failure can't be written", async () => {
+    await finishedSession("2026-10-22-0900");
+    await finishedSession("2026-10-22-1000");
+    await meetings.handle({ type: "meeting.stopped", dir: dir("2026-10-22-0900"), status: "complete" });
+    // The folder went to the Trash mid-transcription, so the failure marker has nowhere to go.
+    await fs.rm(dir("2026-10-22-0900"), { recursive: true });
+    await meetings.engineExited();
+
+    meetings.retry("2026-10-22-1000");
+    expect(sent.at(-1)).toEqual({ type: "transcription.start", dir: dir("2026-10-22-1000") });
+  });
 });

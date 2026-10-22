@@ -136,15 +136,23 @@ export class Meetings {
   // The engine process ended. A meeting it was recording ends without
   // meta.json and lists as failed; a transcription it was running is marked
   // failed, so a meeting that crashes the engine isn't retried forever.
+  // Memory resets first, so a failure marker that can't be written (the
+  // folder was trashed) never leaves the queue stuck.
   async engineExited(): Promise<void> {
+    const interrupted = this.current;
     if (this.#phase !== "idle") this.notice = "The recording engine stopped unexpectedly.";
     this.#phase = "idle";
     this.#recording = null;
-    if (this.current) await this.library.recordFailure(this.current, "The engine stopped while transcribing.");
     this.current = null;
     this.queue = [];
     this.model = { state: "unknown" };
-    this.publish();
+    try {
+      if (interrupted) await this.library.recordFailure(interrupted, "The engine stopped while transcribing.");
+    } catch (error) {
+      console.error(`Couldn't mark ${interrupted} as failed: ${String(error)}`);
+    } finally {
+      this.publish();
+    }
   }
 
   private enqueue(id: string): void {
