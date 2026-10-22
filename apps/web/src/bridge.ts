@@ -44,10 +44,11 @@ export function useNow(enabled: boolean, intervalMs = 500): number {
   return now;
 }
 
-// The meeting's transcript once it's ready; empty before.
+// The meeting's transcript once it's ready, or the lines that worked when
+// transcription partly failed; empty before.
 export function useTranscript(meeting: Meeting): ReadonlyArray<TranscriptLine> {
   const [lines, setLines] = useState<ReadonlyArray<TranscriptLine>>([]);
-  const ready = meeting.state === "ready";
+  const ready = meeting.state === "ready" || meeting.state === "failed";
   useEffect(() => {
     if (!ready) {
       setLines([]);
