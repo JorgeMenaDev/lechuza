@@ -101,6 +101,8 @@ struct KeyFilter {
     }
 
     private static let escape: Int64 = 53
+    /// 🌐, the fn key itself: macOS sends its keyDown and keyUp when fn/🌐 is tapped.
+    private static let globe: Int64 = 179
     /// Every key code but the modifiers (54–63: ⌘ ⇧ ⇪ ⌥ ⌃ fn).
     private static let keys: [Int64] = Array(0..<54) + Array(64..<128)
 
@@ -131,6 +133,8 @@ struct KeyFilter {
             guard escapeIsOurs else { return (nil, false) }
             swallowingEscape = true
             return (.escape, true)
+        case .keyDown(Self.globe, _):
+            return (nil, false)
         case .keyDown(_, let isRepeat):
             return (isRepeat ? nil : .otherKey, false)
         case .keyUp(Self.escape) where swallowingEscape:
