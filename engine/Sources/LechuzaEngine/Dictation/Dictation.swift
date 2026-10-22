@@ -39,7 +39,11 @@ final class Dictation {
             DispatchQueue.main.async { MainActor.assumeIsolated { [weak self] in self?.handle(input, at: time) } }
         }
         if keys == nil { emit(.error(message: "no event tap for the hotkey: Accessibility isn't granted")) }
-        if ParakeetEngine.isDownloaded() { Task { try? await parakeet.prepare() } }
+        if ParakeetEngine.isDownloaded() {
+            Task { [parakeet, emit] in
+                do { try await parakeet.prepare() } catch { emit(.error(message: "dictation model didn't load: \(error)")) }
+            }
+        }
     }
 
     /// The Flow bar was clicked while idle.
