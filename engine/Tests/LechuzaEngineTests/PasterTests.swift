@@ -60,6 +60,14 @@ final class PasterTests: XCTestCase {
         XCTAssertEqual(pasteboard.string(forType: .string), "copied before")
     }
 
+    /// The engine quits during a hold: the clipboard comes back at once.
+    func testQuittingDuringTheHoldGivesTheClipboardBackAtOnce() {
+        let paster = paster(holdFor: .seconds(10))
+        XCTAssertEqual(paster.paste("dictated words", into: 100), .pasted)
+        paster.giveBackNow()
+        XCTAssertEqual(pasteboard.string(forType: .string), "copied before")
+    }
+
     func testWithoutAccessibilityTheClipboardIsNeverTouched() async {
         trusted = false
         let before = pasteboard.changeCount

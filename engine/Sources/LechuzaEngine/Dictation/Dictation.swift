@@ -31,6 +31,9 @@ final class Dictation {
     /// Goes up when Esc throws away the dictations being transcribed.
     private var generation = 0
     private var phase = DictationPhase.idle
+    /// Set for good when the engine quits: nothing starts, pastes or writes
+    /// to the app after it.
+    private var quitting = false
 
     /// The microphone, key tap and paster are the Mac's own unless a test
     /// passes fakes.
@@ -51,6 +54,7 @@ final class Dictation {
     /// Listen for `hotkey` from now on, and load the model if it's here. A
     /// dictation under way stops: the new tap knows nothing of its key.
     func configure(hotkey: Hotkey) {
+        guard !quitting else { return }
         interrupt(because: "The dictation key changed, so Lechuza stopped listening.")
         keys?.stop()
         keys = makeKeyTap(hotkey) { input, time in
@@ -83,6 +87,7 @@ final class Dictation {
 
     /// One input from the key tap (or the Flow bar), at `time` on the uptime clock.
     func handle(_ input: HotkeyGesture.Input, at time: TimeInterval) {
+        guard !quitting else { return }
         if input == .escape, !gesture.isDictating, pending > 0 {
             generation += 1
             pending = 0
@@ -183,6 +188,23 @@ final class Dictation {
         // The next dictation waits its turn here, so it can't replace these
         // words before the app reads them.
         await paster.giveBack()
+    }
+
+    /// The engine is quitting (a meeting may still be saving): put back a
+    /// clipboard a paste still holds, stop listening, and throw away the
+    /// dictation under way and those not yet pasted. It writes nothing to the
+    /// app, which may be gone.
+    func quit() {
+        quitting = true
+        paster.giveBackNow()
+        generation += 1
+        pending = 0
+        keys?.stop()
+        keys = nil
+        timeout?.cancel()
+        _ = capture?.stop()
+        capture = nil
+        gesture = HotkeyGesture()
     }
 
     /// A dictation is done with, unless Esc threw it away first.
