@@ -1,21 +1,31 @@
-# Lechuza
+<p align="center"><img src="assets/icon.svg" width="160" alt="Lechuza icon: a sleepy owl under a crescent moon"></p>
 
-Lechuza (Spanish for barn owl) is an open-source, on-device voice app for macOS:
+<h1 align="center">Lechuza</h1>
 
-- **Meetings.** Record any call: your microphone and the call's audio become two tracks and a `me` / `them` transcript. Play it back, read along, and copy the whole transcript.
-- **Dictation** (coming, [issue #4](https://github.com/JorgeMenaDev/lechuza/issues/4)). Hold a key, speak, and the text appears wherever you type.
+<p align="center"><em>"La lechuza, la lechuza, hace shhh, hace shhh..."</em></p>
 
-Transcription runs on your Mac with Parakeet. Nothing leaves the machine.
+A small macOS menu-bar app for dictation and meetings. Double-press `fn`, start talking, and your words are typed into whatever text field has the cursor. Start a meeting and Lechuza records you and the call, then gives you a transcript you can replay, follow along and copy. Speech is transcribed on your Mac, so audio never leaves your machine.
 
-Work in progress: the v1 plan is [issue #1](https://github.com/JorgeMenaDev/lechuza/issues/1).
+Why "Lechuza"? It's named after the Spanish children's song *La lechuza*, where the owl goes "shhh". Lechuza is built for quiet dictation in offices and shared spaces, where you whisper slowly instead of talking out loud.
+
+## Features
+
+- **Dictation.** Double-press `fn` to start dictating, and press it once to stop. Or hold `fn` to talk: dictation runs while it's held and stops on release. Both work at any time, with no setting.
+- **Meeting recording.** Start a meeting from the menu bar. Lechuza records your microphone (`me`) and the call's audio (`them`) as separate tracks, then writes a timestamped `me` / `them` transcript.
+- **Meetings dashboard.** Replay any meeting, follow the transcript as it plays, click a line to jump there, and copy the whole transcript in one click.
+- **On-device.** Transcription runs on your Mac with Parakeet, in English, Spanish and 23 other European languages.
 
 <img src="assets/screenshots/meetings.png" alt="A meeting open in Lechuza, with its player and me / them transcript" width="900" />
+
+## Status
+
+In development. The v1 plan is [issue #1](https://github.com/JorgeMenaDev/lechuza/issues/1).
 
 ## Meetings
 
 Lechuza lives in the menu bar as an owl. Click it for **Start meeting**, **Stop meeting** (with the elapsed time), **Open Lechuza** and **Quit Lechuza**. The Meetings page has the same Start and Stop button.
 
-A meeting records two tracks at once: your microphone (`me`) and everything your Mac plays, which is the other side of the call (`them`). When you stop, Lechuza mixes them into one file you can play, then transcribes each track. The first transcription downloads the Parakeet v3 speech model (about 470 MB, once), with progress on the Meetings page. Parakeet v3 understands English, Spanish and 23 other European languages.
+A meeting records two tracks at once: your microphone (`me`) and everything your Mac plays, which is the other side of the call (`them`). When you stop, Lechuza mixes them into one file you can play, then transcribes each track. The first transcription downloads the Parakeet v3 speech model (about 470 MB, once), with progress on the Meetings page.
 
 On the Meetings page, every meeting shows its title, date, length and state: recording, transcribing, ready or failed. Open one to:
 

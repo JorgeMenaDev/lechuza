@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <title>Lechuza</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4A5DE6"/>
+      <stop offset=".6" stop-color="#3845D4"/>
+      <stop offset="1" stop-color="#1D1896"/>
+    </linearGradient>
+  </defs>
+
+  <!-- macOS icon grid: 824 px body centred on the 1024 canvas (100 px margin) -->
+  <g transform="translate(100 100) scale(.8046875)">
+    <!-- Squircle: Apple-style continuous corners -->
+    <path fill="url(#sky)" d="M352.2 0H671.8C773.2 0 823.9 0 878.5 17.3C938.1 39 985 85.9 1006.7 145.5C1024 200.1 1024 250.8 1024 352.2V671.8C1024 773.2 1024 823.9 1006.7 878.5C985 938.1 938.1 985 878.5 1006.7C823.9 1024 773.2 1024 671.8 1024H352.2C250.8 1024 200.1 1024 145.5 1006.7C85.9 985 39 938.1 17.3 878.5C0 823.9 0 773.2 0 671.8V352.2C0 250.8 0 200.1 17.3 145.5C39 85.9 85.9 39 145.5 17.3C200.1 0 250.8 0 352.2 0Z"/>
+
+    <!-- Stars -->
+    <g fill="#FFFBEA">
+      <circle cx="300" cy="65" r="13"/>
+      <circle cx="618" cy="80" r="13"/>
+      <circle cx="184" cy="152" r="17"/>
+      <circle cx="131" cy="353" r="12"/>
+      <circle cx="922" cy="414" r="13"/>
+    </g>
+
+    <!-- Moon: faint dark-side disc, then the crescent -->
+    <circle cx="826" cy="179" r="65" fill="#FFFFFF" fill-opacity=".035"/>
+    <path fill="#F8E9A0" d="M791 112.9A85 85 0 1 0 886.4 231.2A76 76 0 0 1 791 112.9Z"/>
+
+    <!-- Sound waves -->
+    <g fill="none" stroke="#E6ECFF" stroke-linecap="round">
+      <path stroke-width="15" d="M163 472A99 99 0 0 0 160 608"/>
+      <path stroke-width="14" d="M198 494A63 63 0 0 0 200 586"/>
+    </g>
+
+    <!-- Owl body with ear tufts -->
+    <path fill="#E38F3D" d="M316 172L392 246Q512 180 632 246L708 172L732 318C778 400 802 500 802 615C802 800 680 926 512 926C344 926 222 800 222 615C222 500 246 400 292 318Z"/>
+
+    <!-- Belly and chevron feathers -->
+    <ellipse cx="507" cy="740" rx="178" ry="180" fill="#F8EBAA"/>
+    <g fill="none" stroke="#C4A469" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M424 684L451 706L478 684"/>
+      <path d="M398 789L421 808L448 789"/>
+      <path d="M486 763L510 784L536 763"/>
+      <path d="M572 790L595 809L620 790"/>
+    </g>
+
+    <!-- Facial discs, blush, closed eyes -->
+    <g fill="#F7E28F">
+      <circle cx="396" cy="456" r="116"/>
+      <circle cx="628" cy="456" r="116"/>
+    </g>
+    <g fill="#F2A99A" fill-opacity=".35">
+      <ellipse cx="336" cy="515" rx="30" ry="20"/>
+      <ellipse cx="690" cy="512" rx="30" ry="20"/>
+    </g>
+    <g fill="none" stroke="#46222A" stroke-width="14" stroke-linecap="round">
+      <path d="M348 450A55 55 0 0 0 452 450"/>
+      <path d="M572 450A55 55 0 0 0 676 450"/>
+    </g>
+
+    <!-- Beak -->
+    <path fill="#F2A93A" stroke="#F2A93A" stroke-width="8" stroke-linejoin="round" d="M490 510H540L515 564Z"/>
+
+    <!-- Wing raised to the beak ("shhh") with feather stripes -->
+    <path fill="#BC6E2E" d="M530 560C560 515 640 495 700 520C770 550 790 640 782 720C776 790 740 830 700 830C640 830 600 770 575 700C555 645 535 600 530 560Z"/>
+    <g fill="none" stroke="#E7A562" stroke-width="8" stroke-linecap="round">
+      <path d="M614 580L668 606"/>
+      <path d="M612 664L704 688"/>
+      <path d="M650 746L738 746"/>
+    </g>
+
+    <!-- Feet -->
+    <g fill="#F4B83A">
+      <ellipse cx="436" cy="930" rx="40" ry="22"/>
+      <ellipse cx="584" cy="930" rx="40" ry="22"/>
+    </g>
+  </g>
+</svg>
