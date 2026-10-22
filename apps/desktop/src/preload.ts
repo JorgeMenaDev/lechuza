@@ -21,6 +21,9 @@ const bridge: LechuzaBridge = {
   revealMeeting: (id) => ipcRenderer.invoke(IPC.revealMeeting, id),
   retryTranscription: (id) => ipcRenderer.invoke(IPC.retryTranscription, id),
   dismissNotice: () => ipcRenderer.invoke(IPC.dismissNotice),
+  setTheme: (theme) => ipcRenderer.invoke(IPC.setTheme, theme),
+  revealMeetingsFolder: () => ipcRenderer.invoke(IPC.revealMeetingsFolder),
+  openExternal: (page) => ipcRenderer.invoke(IPC.openExternal, page),
 };
 
 contextBridge.exposeInMainWorld("lechuza", bridge);

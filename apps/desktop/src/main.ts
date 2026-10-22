@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import * as path from "node:path";
 
 import {
@@ -6,20 +7,32 @@ import {
   clipboard,
   ipcMain,
   Menu,
+  nativeTheme,
   protocol,
   shell,
   Tray,
   type MenuItemConstructorOptions,
 } from "electron";
 
-import { IPC, MEDIA_SCHEME, formatClock, formatTranscript, type AppState } from "@lechuza/contracts";
+import {
+  IPC,
+  MEDIA_SCHEME,
+  formatClock,
+  formatTranscript,
+  type AppInfo,
+  type AppState,
+  type ExternalPage,
+  type MeetingsState,
+  type Settings,
+} from "@lechuza/contracts";
 
 import { EngineProcess } from "./engineProcess.ts";
 import { MeetingLibrary } from "./library.ts";
 import { handleMediaRequest } from "./mediaProtocol.ts";
 import { Meetings } from "./meetings.ts";
+import { isTheme, loadSettings, saveSettings } from "./settings.ts";
 import { createTrayIcon } from "./trayIcon.ts";
-import { createMainWindow } from "./windows.ts";
+import { createMainWindow, windowBackground } from "./windows.ts";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: MEDIA_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
@@ -45,7 +58,7 @@ function broadcast(channel: string, value: unknown): void {
 }
 
 // While recording, the menu bar shows the elapsed time next to the owl.
-function syncTray(state: AppState): void {
+function syncTray(state: MeetingsState): void {
   if (trayTimer) clearInterval(trayTimer);
   trayTimer = null;
   const recording = state.recording;
@@ -73,11 +86,50 @@ function trayMenu(meetings: Meetings): Menu {
   ]);
 }
 
-function registerIpc(meetings: Meetings, library: MeetingLibrary): void {
+const EXTERNAL_PAGES: Record<ExternalPage, string> = {
+  repository: "https://github.com/JorgeMenaDev/lechuza",
+  "sound-settings": "x-apple.systempreferences:com.apple.Sound-Settings.extension",
+  "privacy-microphone": "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Microphone",
+  "privacy-system-audio": "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_ScreenCapture",
+  "privacy-documents": "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_FilesAndFolders",
+};
+
+function isExternalPage(value: unknown): value is ExternalPage {
+  return typeof value === "string" && Object.hasOwn(EXTERNAL_PAGES, value);
+}
+
+// The first word of the Mac user's full name, capitalised, or null.
+function firstName(): Promise<string | null> {
+  return new Promise((resolve) =>
+    execFile("id", ["-F"], (error, stdout) => {
+      const first = (!error && stdout.trim().split(/\s+/)[0]) || null;
+      resolve(first && first.charAt(0).toLocaleUpperCase() + first.slice(1));
+    }),
+  );
+}
+
+// The settings, applied: the theme drives prefers-color-scheme in every window.
+function applySettings(settings: Settings): void {
+  nativeTheme.themeSource = settings.theme;
+  for (const win of BrowserWindow.getAllWindows()) win.setBackgroundColor(windowBackground());
+}
+
+// The settings in use and the file they're saved to.
+interface SettingsStore {
+  current: Settings;
+  readonly file: string;
+}
+
+function registerIpc(
+  meetings: Meetings,
+  library: MeetingLibrary,
+  settings: SettingsStore,
+  appState: (state: MeetingsState) => AppState,
+): void {
   // Renderer arguments arrive untyped; anything but a string becomes "".
   const text = (value: unknown) => (typeof value === "string" ? value : "");
 
-  ipcMain.handle(IPC.getState, () => meetings.state());
+  ipcMain.handle(IPC.getState, async () => appState(await meetings.state()));
   ipcMain.handle(IPC.startMeeting, () => meetings.start());
   ipcMain.handle(IPC.stopMeeting, () => meetings.stop());
   ipcMain.handle(IPC.getTranscript, (_event, id: unknown) => library.transcript(text(id)));
@@ -102,14 +154,31 @@ function registerIpc(meetings: Meetings, library: MeetingLibrary): void {
   });
   ipcMain.handle(IPC.retryTranscription, (_event, id: unknown) => meetings.retry(text(id)));
   ipcMain.handle(IPC.dismissNotice, () => meetings.dismissNotice());
+  ipcMain.handle(IPC.setTheme, async (_event, theme: unknown) => {
+    if (!isTheme(theme)) return;
+    settings.current = { ...settings.current, theme };
+    applySettings(settings.current);
+    meetings.publish();
+    await saveSettings(settings.file, settings.current);
+  });
+  ipcMain.handle(IPC.revealMeetingsFolder, () => shell.openPath(library.root));
+  ipcMain.handle(IPC.openExternal, async (_event, page: unknown) => {
+    if (isExternalPage(page)) await shell.openExternal(EXTERNAL_PAGES[page]);
+  });
 }
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
+  const settingsFile = path.join(app.getPath("userData"), "settings.json");
+  const settings: SettingsStore = { current: await loadSettings(settingsFile), file: settingsFile };
+  applySettings(settings.current);
   // LECHUZA_MEETINGS_DIR points the app at another folder, for demos and screenshots.
   const library = new MeetingLibrary(
     process.env.LECHUZA_MEETINGS_DIR ?? path.join(app.getPath("documents"), "Lechuza", "Meetings"),
     app.getLocale(),
   );
+  const info: AppInfo = { version: app.getVersion(), meetingsDir: library.root, firstName: await firstName() };
+  // Windows get the meeting state with the settings and app info added.
+  const appState = (state: MeetingsState): AppState => ({ ...state, settings: settings.current, info });
   // Packaged, the engine sits in Contents/Resources; `bun run dev` points at the Swift build.
   const engine = new EngineProcess(process.env.LECHUZA_ENGINE ?? path.join(process.resourcesPath, "lechuza-engine"), {
     onEvent: (event) => void meetings.handle(event),
@@ -121,14 +190,14 @@ void app.whenReady().then(() => {
   });
   const meetings = new Meetings(library, engine, {
     onState: (state) => {
-      broadcast(IPC.state, state);
+      broadcast(IPC.state, appState(state));
       syncTray(state);
     },
     onLevels: (levels) => broadcast(IPC.levels, levels),
   });
 
   protocol.handle(MEDIA_SCHEME, (request) => handleMediaRequest(library, request));
-  registerIpc(meetings, library);
+  registerIpc(meetings, library, settings, appState);
   engine.start();
 
   tray = new Tray(createTrayIcon());
