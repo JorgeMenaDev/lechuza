@@ -1,0 +1,3 @@
+import LechuzaEngine
+
+EngineMain.run()

@@ -1,0 +1,24 @@
+{
+  "name": "lechuza",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.2.21",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun apps/desktop/scripts/dev.ts",
+    "build": "bun run --cwd apps/web build && bun run build:engine && bun run --cwd apps/desktop build",
+    "build:engine": "swift build -c release --package-path engine --product lechuza-engine",
+    "start": "bun run build && bun run --cwd apps/desktop start",
+    "dist": "bun run build && bun run --cwd apps/desktop dist",
+    "typecheck": "bun run --cwd packages/contracts typecheck && bun run --cwd apps/web typecheck && bun run --cwd apps/desktop typecheck",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.21",
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}
