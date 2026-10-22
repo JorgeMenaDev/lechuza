@@ -27,7 +27,7 @@ Lechuza lives in the menu bar as an owl. Click it for **Start meeting**, **Stop 
 
 A meeting records two tracks at once: your microphone (`me`) and everything your Mac plays, which is the other side of the call (`them`). When you stop, Lechuza mixes them into one file you can play, then transcribes each track. The first transcription downloads the Parakeet v3 speech model (about 470 MB, once), with progress on the Meetings page.
 
-On the Meetings page, every meeting shows its title, date, length and state: recording, transcribing, ready or failed. Open one to:
+On the Meetings page, every meeting shows its title, date, length and state: recording, transcribing, ready or failed. Point at one to read the start of its transcript in the side pane. Open one to:
 
 - **Play** it. The transcript line being spoken lights up. Click any line to jump there.
 - **Copy transcript** as plain text, one line per sentence: `[0:05] them: Sí, claro…`
@@ -48,6 +48,10 @@ Each meeting is a plain folder in `~/Documents/Lechuza/Meetings/<yyyy-MM-dd-HHmm
 | `meta.json` | Start, length, track health and your title |
 
 Lechuza has no echo cancellation yet: without headphones, your microphone also hears the other side, so some of their words appear under `me` too.
+
+## Home and Settings
+
+Home greets you, lists your recent meetings by day, and adds up how many you've had and how long you've recorded. **Settings**, at the bottom of the sidebar, has the theme, your microphone, the speech model, the meetings folder, permissions and the version. The theme follows your Mac's appearance, or pick Light or Dark there or with the moon at the top right.
 
 ## Permissions
 
@@ -82,14 +86,16 @@ packages/contracts     Types and IPC channels shared by every process
   src/engine.ts          The app ↔ engine protocol (JSON lines), with a runtime parser
   fixtures/              One example of every engine message; both sides' tests read it
 apps/desktop           Electron main process
-  meetings.ts            Recording and transcription lifecycle (the single source of state)
+  meetings.ts            Recording and transcription lifecycle (the single source of meeting state)
   engineProcess.ts       Spawns lechuza-engine and speaks the protocol
   library.ts             Meeting folders on disk: list, rename, transcript
   mediaProtocol.ts       lechuza-media:// with byte ranges, so the player can seek
+  settings.ts            Your settings (the theme), saved in the app's data folder
   main.ts                Menu bar, IPC, wiring
-apps/web               React 19 + Vite + Tailwind 4; one bundle, #/surface picks the screen
-  surfaces/Meetings.tsx  The Meetings page
-  index.css              Every style, by class name
+apps/web               React 19 + Vite + Tailwind 4; one bundle, #/surface picks the window
+  surfaces/Main.tsx      The main window: sidebar, pages and the Settings dialog
+  pages/                 Home, Meetings, one meeting, Settings
+  index.css              Every style and colour, light and dark, by class name
 engine/                Swift package: the lechuza-engine helper
   Audio/                 Microphone (AVAudioEngine) and system audio (Core Audio process tap)
   RecordingSession.swift Both tracks on one clock, with capture health in meta.json
@@ -109,6 +115,7 @@ A meeting, step by step:
 
 - [Quill](https://github.com/humanitas-labs/quill) by Humanitas Labs. The engine's two-track capture, capture health, session metadata and Parakeet transcription are adapted from Quill (MIT; see [NOTICE](NOTICE)).
 - [FluidAudio](https://github.com/FluidInference/FluidAudio) runs [Parakeet TDT 0.6B v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) on the Neural Engine.
+- The interface uses the [Figtree](https://github.com/erikdkennedy/figtree) and [EB Garamond](https://github.com/octaviopardo/EBGaramond12) fonts (SIL Open Font License) and [Lucide](https://lucide.dev) icons (ISC).
 
 ## License
 

@@ -1,5 +1,6 @@
 {
   "name": "@lechuza/desktop",
+  "productName": "Lechuza",
   "version": "0.1.0",
   "private": true,
   "description": "Lechuza: on-device dictation and meeting transcripts for macOS.",
@@ -39,6 +40,7 @@
     "mac": {
       "category": "public.app-category.productivity",
       "target": "dmg",
+      "icon": "build/icon.icns",
       "minimumSystemVersion": "15.0",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Lechuza records your microphone during meetings, so you can replay and read them. Audio never leaves this Mac.",

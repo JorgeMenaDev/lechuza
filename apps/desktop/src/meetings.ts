@@ -1,6 +1,6 @@
 import * as path from "node:path";
 
-import type { AppState, EngineCommand, EngineEvent, Levels, ModelStatus, RecorderPhase } from "@lechuza/contracts";
+import type { EngineCommand, EngineEvent, Levels, MeetingsState, ModelStatus, RecorderPhase } from "@lechuza/contracts";
 
 import type { MeetingLibrary } from "./library.ts";
 
@@ -9,14 +9,15 @@ export interface EngineLink {
 }
 
 export interface MeetingsListener {
-  onState(state: AppState): void;
+  onState(state: MeetingsState): void;
   onLevels(levels: Levels): void;
 }
 
-// The meeting lifecycle and the single source of app state. Intents come from
-// the tray and the renderer; facts come from the engine's events. Every change
-// is broadcast as a whole AppState. Transcription runs one meeting at a time,
-// in the order meetings were queued.
+// The meeting lifecycle and the single source of meeting state. Intents come
+// from the tray and the renderer; facts come from the engine's events. Every
+// change is broadcast as a whole MeetingsState, which main completes into the
+// AppState windows get. Transcription runs one meeting at a time, in the order
+// meetings were queued.
 export class Meetings {
   #phase: RecorderPhase = "idle";
   #recording: { id: string; startedAt: number } | null = null;
@@ -42,7 +43,7 @@ export class Meetings {
     return this.#recording;
   }
 
-  async state(): Promise<AppState> {
+  async state(): Promise<MeetingsState> {
     const transcribing = new Set([...this.queue, ...(this.current ? [this.current] : [])]);
     return {
       phase: this.#phase,
