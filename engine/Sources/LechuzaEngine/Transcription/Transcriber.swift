@@ -1,5 +1,13 @@
 import Foundation
 
+/// What the transcriber needs from a speech model: Parakeet in the app, a
+/// fake in tests.
+protocol SpeechRecognizer: Sendable {
+    func transcribe(_ audio: URL) async throws -> [TranscriptSegment]
+}
+
+extension ParakeetEngine: SpeechRecognizer {}
+
 /// Turns a finished session's segment files into transcript.json and
 /// transcript.md: mic segments become "me" lines and system segments "them",
 /// each shifted onto the session clock and merged by time. Progress goes to
@@ -9,13 +17,26 @@ enum Transcriber {
     /// reason; the app shows it until a retry succeeds.
     static let errorFile = "transcript-error.txt"
 
+    /// Some segments couldn't be transcribed. The rest are in the transcript.
+    struct SegmentsFailed: Error, CustomStringConvertible {
+        let failures: [(file: String, error: any Error)]
+
+        var description: String {
+            failures.map { "Couldn't transcribe \($0.file): \($0.error)" }.joined(separator: "\n")
+        }
+    }
+
+    /// Transcribe every input into the transcript. A segment that fails
+    /// doesn't cost the rest: the transcript keeps what worked, then this
+    /// throws `SegmentsFailed`, so the meeting shows as failed with Retry.
     static func transcribe(
         _ dir: URL,
         inputs: [SessionMeta.TrackInput],
         captureStatus: TrackStatus,
-        with engine: ParakeetEngine
+        with engine: some SpeechRecognizer
     ) async throws {
         var merged: [Transcript.Segment] = []
+        var failures: [(file: String, error: any Error)] = []
         for input in inputs {
             let audio = dir.appendingPathComponent(input.file)
             guard FileManager.default.fileExists(atPath: audio.path) else {
@@ -23,13 +44,12 @@ enum Transcriber {
                 continue
             }
             log(dir, "transcribing \(input.file)")
-            // One bad segment (empty, truncated) shouldn't cost us the rest —
-            // log it and keep going.
             let segments: [TranscriptSegment]
             do {
                 segments = try await engine.transcribe(audio)
             } catch {
-                log(dir, "skipping \(input.file): \(error)")
+                log(dir, "failed \(input.file): \(error)")
+                failures.append((input.file, error))
                 continue
             }
             merged += Transcript.shifted(segments, speaker: input.speaker, offsetMs: input.offsetMs)
@@ -44,6 +64,7 @@ enum Transcriber {
         )
         try transcript.write(to: dir, captureStatus: captureStatus)
         log(dir, "done — \(merged.count) segments")
+        guard failures.isEmpty else { throw SegmentsFailed(failures: failures) }
     }
 
     /// Append a timestamped line to the session's transcribe.log.

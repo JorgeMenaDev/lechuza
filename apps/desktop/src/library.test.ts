@@ -81,6 +81,17 @@ describe("MeetingLibrary.list", () => {
     expect(meeting?.error).toBe("The recording stopped before it was saved.");
   });
 
+  test("a transcript that only partly worked is failed, so it can be retried", async () => {
+    await session("2026-10-22-0800", {
+      "meta.json": meta("2026-10-22T08:00:00Z", 60),
+      "transcript.json": transcript,
+      "transcript-error.txt": "Couldn't transcribe system.aac: unreadable audio\n",
+    });
+    const [meeting] = await library.list(idle);
+    expect(meeting?.state).toBe("failed");
+    expect(meeting?.error).toBe("Couldn't transcribe system.aac: unreadable audio");
+  });
+
   test("leaves out anything that isn't a meeting folder", async () => {
     await fs.writeFile(path.join(root, ".DS_Store"), "");
     await session("Notes", {});

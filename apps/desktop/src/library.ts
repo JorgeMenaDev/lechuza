@@ -106,7 +106,8 @@ export class MeetingLibrary {
   }
 
   // Newest first. State comes from the files, overridden by what main knows
-  // is live: recording > transcribing > ready > failed.
+  // is live: recording > transcribing > failed > ready. An error beats a
+  // transcript, which may hold only the segments that worked.
   async list(live: LiveMeetings): Promise<Meeting[]> {
     const names = await fs.readdir(this.root).catch(() => []);
     const meetings = await Promise.all(names.filter((name) => FOLDER_NAME.test(name)).map((id) => this.load(id, live)));
@@ -169,11 +170,13 @@ export class MeetingLibrary {
       ? "recording"
       : live.transcribing.has(id)
         ? "transcribing"
-        : hasTranscript
-          ? "ready"
-          : error !== null || !meta
-            ? "failed"
-            : "transcribing";
+        : error !== null
+          ? "failed"
+          : hasTranscript
+            ? "ready"
+            : !meta
+              ? "failed"
+              : "transcribing";
     return {
       id,
       title: meta?.title ?? defaultTitle(startedAt, this.locale),
