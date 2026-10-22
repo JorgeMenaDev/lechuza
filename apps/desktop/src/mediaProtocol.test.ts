@@ -62,4 +62,18 @@ describe("handleMediaRequest", () => {
     expect((await handleMediaRequest(library, new Request("lechuza-media://meeting/2026-10-23-0900"))).status).toBe(404);
     expect((await handleMediaRequest(library, new Request("lechuza-media://meeting/..%2F..%2Fetc"))).status).toBe(404);
   });
+
+  test("answers 404 for a symlink that leads out of the meetings folder", async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), "lechuza-outside-"));
+    await fs.writeFile(path.join(outside, "meeting.m4a"), "secret");
+    await fs.mkdir(path.join(root, "2026-10-23-0900"));
+    await fs.symlink(path.join(outside, "meeting.m4a"), path.join(root, "2026-10-23-0900", "meeting.m4a"));
+    await fs.symlink(outside, path.join(root, "2026-10-23-1000"));
+    try {
+      expect((await handleMediaRequest(library, new Request("lechuza-media://meeting/2026-10-23-0900"))).status).toBe(404);
+      expect((await handleMediaRequest(library, new Request("lechuza-media://meeting/2026-10-23-1000"))).status).toBe(404);
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
+  });
 });

@@ -94,9 +94,15 @@ export class MeetingLibrary {
     return path.dirname(resolved) === path.resolve(this.root) && FOLDER_NAME.test(id) ? resolved : null;
   }
 
-  mixFile(id: string): string | null {
+  // The real path of a meeting's mix, or null when it's missing or a symlink
+  // (of the file or its folder) leads out of the meetings folder.
+  async mixFile(id: string): Promise<string | null> {
     const dir = this.dir(id);
-    return dir && path.join(dir, MIX_FILE);
+    if (!dir) return null;
+    const [file, root] = await Promise.all([fs.realpath(path.join(dir, MIX_FILE)), fs.realpath(this.root)]).catch(
+      () => [null, null],
+    );
+    return file && root && file.startsWith(root + path.sep) ? file : null;
   }
 
   // Newest first. State comes from the files, overridden by what main knows
