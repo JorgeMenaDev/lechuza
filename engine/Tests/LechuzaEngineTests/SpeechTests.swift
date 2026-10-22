@@ -77,14 +77,14 @@ final class SpeechTests: XCTestCase {
 
         let transcript = try JSONDecoder().decode(
             Transcript.self, from: Data(contentsOf: dir.appendingPathComponent("transcript.json")))
-        let me = transcript.segments.filter { $0.speaker == "me" }.map(\.text).joined(separator: " ").lowercased()
-        let them = transcript.segments.filter { $0.speaker == "them" }.map(\.text).joined(separator: " ")
+        let me = transcript.segments.filter { $0.speaker == .me }.map(\.text).joined(separator: " ").lowercased()
+        let them = transcript.segments.filter { $0.speaker == .them }.map(\.text).joined(separator: " ")
             .lowercased()
         XCTAssertTrue(me.contains("weather") && me.contains("london"), me)
         XCTAssertTrue(them.contains("reunión") && them.contains("equipo"), them)
-        XCTAssertEqual(transcript.segments.first?.speaker, "me")
+        XCTAssertEqual(transcript.segments.first?.speaker, .me)
         XCTAssertGreaterThanOrEqual(
-            transcript.segments.first { $0.speaker == "them" }?.start_ms ?? 0, themOffsetMs)
+            transcript.segments.first { $0.speaker == .them }?.start_ms ?? 0, themOffsetMs)
         XCTAssertTrue(
             FileManager.default.fileExists(atPath: dir.appendingPathComponent("transcript.md").path))
 
@@ -108,7 +108,7 @@ final class SpeechTests: XCTestCase {
             duration_seconds: 0, status: .incomplete,
             tracks: [
                 SessionMeta.Track(
-                    kind: .mic, speaker: "me", status: .incomplete,
+                    kind: .mic, speaker: .me, status: .incomplete,
                     segments: [
                         SessionMeta.Segment(
                             file: "mic.aac", start_offset_ms: 300, end_offset_ms: 300,

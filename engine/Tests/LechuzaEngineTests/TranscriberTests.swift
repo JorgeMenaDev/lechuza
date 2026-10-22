@@ -35,8 +35,8 @@ final class TranscriberTests: XCTestCase {
     func testAFailedSegmentFailsTheTranscriptionAndKeepsTheRest() async throws {
         let recognizer = FakeRecognizer(answers: ["mic.aac": [TranscriptSegment(start: 1, end: 2, text: "Hi.")]])
         let inputs = [
-            SessionMeta.TrackInput(file: "mic.aac", speaker: "me", offsetMs: 0),
-            SessionMeta.TrackInput(file: "system.aac", speaker: "them", offsetMs: 0),
+            SessionMeta.TrackInput(file: "mic.aac", speaker: .me, offsetMs: 0),
+            SessionMeta.TrackInput(file: "system.aac", speaker: .them, offsetMs: 0),
         ]
         do {
             try await Transcriber.transcribe(dir, inputs: inputs, captureStatus: .complete, with: recognizer)
@@ -60,8 +60,8 @@ final class TranscriberTests: XCTestCase {
             "system.aac": [TranscriptSegment(start: 3, end: 4, text: "Hola.")],
         ])
         let inputs = [
-            SessionMeta.TrackInput(file: "mic.aac", speaker: "me", offsetMs: 0),
-            SessionMeta.TrackInput(file: "system.aac", speaker: "them", offsetMs: 0),
+            SessionMeta.TrackInput(file: "mic.aac", speaker: .me, offsetMs: 0),
+            SessionMeta.TrackInput(file: "system.aac", speaker: .them, offsetMs: 0),
         ]
         try await Transcriber.transcribe(dir, inputs: inputs, captureStatus: .complete, with: recognizer)
 
@@ -74,14 +74,14 @@ final class TranscriberTests: XCTestCase {
             "system.aac": [TranscriptSegment(start: 3.5, end: 6.8, text: "The budget moves to Thursday.")],
         ])
         let inputs = [
-            SessionMeta.TrackInput(file: "mic.aac", speaker: "me", offsetMs: 0),
-            SessionMeta.TrackInput(file: "system.aac", speaker: "them", offsetMs: 0),
+            SessionMeta.TrackInput(file: "mic.aac", speaker: .me, offsetMs: 0),
+            SessionMeta.TrackInput(file: "system.aac", speaker: .them, offsetMs: 0),
         ]
         try await Transcriber.transcribe(dir, inputs: inputs, captureStatus: .complete, with: recognizer)
 
         let transcript = try JSONDecoder().decode(
             Transcript.self, from: Data(contentsOf: dir.appendingPathComponent("transcript.json")))
-        XCTAssertEqual(transcript.segments.map(\.speaker), ["them"])
+        XCTAssertEqual(transcript.segments.map(\.speaker), [.them])
     }
 
     /// meta.json names a segment that isn't on disk: the meeting is missing
@@ -90,8 +90,8 @@ final class TranscriberTests: XCTestCase {
         try FileManager.default.removeItem(at: dir.appendingPathComponent("system.aac"))
         let recognizer = FakeRecognizer(answers: ["mic.aac": [TranscriptSegment(start: 1, end: 2, text: "Hi.")]])
         let inputs = [
-            SessionMeta.TrackInput(file: "mic.aac", speaker: "me", offsetMs: 0),
-            SessionMeta.TrackInput(file: "system.aac", speaker: "them", offsetMs: 0),
+            SessionMeta.TrackInput(file: "mic.aac", speaker: .me, offsetMs: 0),
+            SessionMeta.TrackInput(file: "system.aac", speaker: .them, offsetMs: 0),
         ]
         do {
             try await Transcriber.transcribe(dir, inputs: inputs, captureStatus: .complete, with: recognizer)

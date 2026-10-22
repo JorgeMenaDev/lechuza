@@ -4,7 +4,7 @@ import Foundation
 /// JSON schema the app reads.
 struct Transcript: Codable, Equatable {
     struct Segment: Codable, Equatable {
-        let speaker: String
+        let speaker: Speaker
         let start_ms: Int
         let end_ms: Int
         let text: String
@@ -19,7 +19,7 @@ struct Transcript: Codable, Equatable {
     /// the file's start offset. Segments are never collapsed against a
     /// previous file's end — a capture gap stays visible as a timestamp gap.
     static func shifted(
-        _ segments: [TranscriptSegment], speaker: String, offsetMs: Int
+        _ segments: [TranscriptSegment], speaker: Speaker, offsetMs: Int
     ) -> [Segment] {
         segments.map {
             Segment(
@@ -42,10 +42,10 @@ struct Transcript: Codable, Equatable {
     static func removingEcho(from segments: [Segment]) -> [Segment] {
         // The echo reaches the mic about 0.1–0.3 s after the call plays it.
         let lagMs = 500
-        let them = segments.filter { $0.speaker == TrackKind.system.speaker }
+        let them = segments.filter { $0.speaker == .them }
             .map { (line: $0, words: words($0.text)) }
         return segments.filter { line in
-            guard line.speaker == TrackKind.mic.speaker else { return true }
+            guard line.speaker == .me else { return true }
             let heard = Set(
                 them.filter { $0.line.start_ms < line.end_ms && line.start_ms < $0.line.end_ms + lagMs }
                     .flatMap(\.words))
@@ -83,7 +83,7 @@ struct Transcript: Codable, Equatable {
         }
         lines.append("")
         for seg in segments {
-            lines.append("**[\(Self.clock(seg.start_ms))] \(seg.speaker):** \(seg.text)")
+            lines.append("**[\(Self.clock(seg.start_ms))] \(seg.speaker.rawValue):** \(seg.text)")
             lines.append("")
         }
         return lines.joined(separator: "\n")

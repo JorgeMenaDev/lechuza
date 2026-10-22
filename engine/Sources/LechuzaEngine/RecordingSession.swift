@@ -38,7 +38,8 @@ final class RecordingSession {
         /// The segment being written, with the session time it started
         /// (its first write, once it has one). The manifest lists it.
         var live: (file: String, startMs: Int)?
-        var pendingRestart: (dueMs: Int, attempt: Int)?
+        /// When a delayed restart is due.
+        var restartDueMs: Int?
         var lastBufferEndMs: Int?
         /// Its teardown timed out, so its control queue is blocked: never
         /// start or stop it again.
@@ -128,7 +129,7 @@ final class RecordingSession {
         var trackMetas: [SessionMeta.Track] = []
         var worst = TrackStatus.complete
         for track in tracks {
-            track.pendingRestart = nil
+            track.restartDueMs = nil
             track.machine?.stopped()
             let finalTelemetry = track.recorder.telemetry()
             if !track.wedged { record(track.recorder.stop(), into: track) }
@@ -177,8 +178,8 @@ final class RecordingSession {
         guard live else { return }
         let now = nowMs()
         for track in tracks {
-            if let pending = track.pendingRestart, now >= pending.dueMs {
-                track.pendingRestart = nil
+            if let due = track.restartDueMs, now >= due {
+                track.restartDueMs = nil
                 performRestart(track)
             }
             guard track.machine != nil else { continue }
@@ -263,7 +264,7 @@ final class RecordingSession {
             throw error
         }
         if track.machine == nil {
-            track.machine = TrackHealthMachine(kind: kind, policy: policy, startMs: nowMs())
+            track.machine = TrackHealthMachine(policy: policy, startMs: nowMs())
         }
     }
 
@@ -287,7 +288,7 @@ final class RecordingSession {
             if delayMs <= 0 {
                 performRestart(track)
             } else {
-                track.pendingRestart = (dueMs: nowMs() + delayMs, attempt: 0)
+                track.restartDueMs = nowMs() + delayMs
             }
         case .declareDegraded:
             FileHandle.standardError.write(

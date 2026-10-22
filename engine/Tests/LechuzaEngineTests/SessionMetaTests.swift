@@ -31,7 +31,7 @@ final class SessionMetaTests: XCTestCase {
             tracks: [
                 SessionMeta.Track(
                     kind: .mic,
-                    speaker: "me",
+                    speaker: .me,
                     status: .recovered,
                     segments: [
                         SessionMeta.Segment(
@@ -53,7 +53,7 @@ final class SessionMetaTests: XCTestCase {
                 ),
                 SessionMeta.Track(
                     kind: .system,
-                    speaker: "them",
+                    speaker: .them,
                     status: .complete,
                     segments: [
                         SessionMeta.Segment(
@@ -79,9 +79,9 @@ final class SessionMetaTests: XCTestCase {
         XCTAssertEqual(
             inputs,
             [
-                SessionMeta.TrackInput(file: "mic.aac", speaker: "me", offsetMs: 18),
-                SessionMeta.TrackInput(file: "mic-002.aac", speaker: "me", offsetMs: 1_691_120),
-                SessionMeta.TrackInput(file: "system.aac", speaker: "them", offsetMs: 0),
+                SessionMeta.TrackInput(file: "mic.aac", speaker: .me, offsetMs: 18),
+                SessionMeta.TrackInput(file: "mic-002.aac", speaker: .me, offsetMs: 1_691_120),
+                SessionMeta.TrackInput(file: "system.aac", speaker: .them, offsetMs: 0),
             ])
     }
 

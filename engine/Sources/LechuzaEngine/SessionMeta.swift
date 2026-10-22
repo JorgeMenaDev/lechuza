@@ -18,7 +18,7 @@ struct SessionMeta: Codable, Equatable, Sendable {
 
     struct Track: Codable, Equatable, Sendable {
         var kind: TrackKind
-        var speaker: String
+        var speaker: Speaker
         var status: TrackStatus
         var segments: [Segment]
         var interruptions: [Interruption]
@@ -36,7 +36,7 @@ struct SessionMeta: Codable, Equatable, Sendable {
     /// it starts on the session clock.
     struct TrackInput: Equatable, Sendable {
         var file: String
-        var speaker: String
+        var speaker: Speaker
         var offsetMs: Int
     }
 

@@ -19,7 +19,7 @@ final class CaptureHealthTests: XCTestCase {
     }()
 
     private func machine(startMs: Int = 0) -> TrackHealthMachine {
-        TrackHealthMachine(kind: .mic, policy: policy, startMs: startMs)
+        TrackHealthMachine(policy: policy, startMs: startMs)
     }
 
     private func writing(first: Int, last: Int) -> TelemetrySnapshot {
@@ -125,7 +125,6 @@ final class CaptureHealthTests: XCTestCase {
         XCTAssertEqual(m.state, .recovering)
         XCTAssertNil(m.tick(nowMs: 10400, telemetry: writing(first: 5300, last: 10300)))
         XCTAssertEqual(m.state, .healthy)
-        XCTAssertTrue(m.didRecover)
         XCTAssertEqual(m.interruptions[0].recovered_offset_ms, 5300)
         XCTAssertEqual(m.interruptions[0].attempts, 1)
     }
