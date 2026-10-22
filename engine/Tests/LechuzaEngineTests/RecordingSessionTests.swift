@@ -10,7 +10,13 @@ final class FakeRecorder: TrackRecorder, @unchecked Sendable {
     var startedFiles: [String] = []
     var startAttempts = 0
     var failStarts = false
+    /// Teardown wedges: stop times out and the recorder's queue stays
+    /// blocked, so a real start would never return.
+    var stopTimesOut = false
+    var stopCalls = 0
+    var startsWhileWedged = 0
     private var active = false
+    private var wedged = false
 
     init(kind: TrackKind) {
         self.kind = kind
@@ -20,16 +26,18 @@ final class FakeRecorder: TrackRecorder, @unchecked Sendable {
 
     func start(url: URL, clock: SessionClock, onEvent: @escaping @Sendable (RecorderEvent) -> Void) throws {
         startAttempts += 1
+        if wedged { startsWhileWedged += 1 }
         if failStarts { throw StartError() }
         active = true
         current = TelemetrySnapshot()
         startedFiles.append(url.lastPathComponent)
     }
 
-    func stop() -> SegmentStats? {
-        guard active else { return nil }
+    func stop() -> SegmentStop {
+        stopCalls += 1
+        guard active else { return .stopped(nil) }
         active = false
-        return SegmentStats(
+        let stats = SegmentStats(
             file: startedFiles.last ?? "?",
             firstWriteMs: current.firstWriteMs,
             lastBufferEndMs: current.lastBufferEndMs,
@@ -37,6 +45,11 @@ final class FakeRecorder: TrackRecorder, @unchecked Sendable {
             sampleRateHz: 48000,
             channels: 1
         )
+        if stopTimesOut {
+            wedged = true
+            return .timedOut(stats)
+        }
+        return .stopped(stats)
     }
 
     func telemetry() -> TelemetrySnapshot {
@@ -120,8 +133,43 @@ final class RecordingSessionTests: XCTestCase {
         XCTAssertEqual(meta.schema_version, 2)
         XCTAssertEqual(meta.status, .complete)
         XCTAssertEqual(meta.tracks.map(\.kind), [.mic, .system])
-        XCTAssertEqual(meta.tracks[0].segments.map(\.file), ["mic.caf"])
+        XCTAssertEqual(meta.tracks[0].segments.map(\.file), ["mic.aac"])
         XCTAssertTrue(meta.tracks[0].interruptions.isEmpty)
+    }
+
+    /// The engine can die before the first watchdog tick, or right after a
+    /// restart. Each segment is in the manifest before its recorder starts,
+    /// at the time it started, or recovery never finds its audio.
+    func testKeepsAManifestOfItsSegmentsUntilItStops() throws {
+        func manifestURL(_ session: RecordingSession) -> URL {
+            session.dir.appendingPathComponent(SessionMeta.manifestFile)
+        }
+        // "file@start offset" for each track's segments.
+        func manifestSegments(_ session: RecordingSession) throws -> [String: [String]] {
+            let manifest = try JSONDecoder().decode(SessionMeta.self, from: Data(contentsOf: manifestURL(session)))
+            return Dictionary(
+                uniqueKeysWithValues: manifest.tracks.map {
+                    ($0.kind.rawValue, $0.segments.map { "\($0.file)@\($0.start_offset_ms)" })
+                })
+        }
+        time.ms = 200
+        let session = try makeSession()
+        try session.start()
+        XCTAssertEqual(try manifestSegments(session), ["mic": ["mic.aac@200"], "system": ["system.aac@200"]])
+
+        // Once a segment writes, its offset is its first write.
+        tick(session, at: 1000)
+        XCTAssertEqual(try manifestSegments(session), ["mic": ["mic.aac@500"], "system": ["system.aac@0"]])
+
+        // A restarted segment is listed before it writes.
+        mic.writes(first: 500, last: 1000)
+        tick(session, at: 6000, micStalled: true)
+        XCTAssertEqual(try manifestSegments(session)["mic"], ["mic.aac@500", "mic-002.aac@6000"])
+
+        time.ms = 8000
+        _ = session.stop()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: manifestURL(session).path))
+        XCTAssertNoThrow(try readMeta(session))
     }
 
     func testStallRotatesOnceAndRecoversWithoutTouchingOtherTrack() throws {
@@ -132,8 +180,8 @@ final class RecordingSessionTests: XCTestCase {
         // Mic stalls; system keeps writing. Detection rotates the mic once.
         mic.writes(first: 500, last: 1000)
         tick(session, at: 6000, micStalled: true)
-        XCTAssertEqual(mic.startedFiles, ["mic.caf", "mic-002.caf"])
-        XCTAssertEqual(system.startedFiles, ["system.caf"])
+        XCTAssertEqual(mic.startedFiles, ["mic.aac", "mic-002.aac"])
+        XCTAssertEqual(system.startedFiles, ["system.aac"])
 
         // Replacement segment stabilizes; later stop is a recovered session.
         for ms in stride(from: 7000, through: 13000, by: 1000) {
@@ -148,13 +196,13 @@ final class RecordingSessionTests: XCTestCase {
         let meta = try readMeta(session)
         let micTrack = meta.tracks.first { $0.kind == .mic }!
         XCTAssertEqual(micTrack.status, .recovered)
-        XCTAssertEqual(micTrack.segments.map(\.file), ["mic.caf", "mic-002.caf"])
+        XCTAssertEqual(micTrack.segments.map(\.file), ["mic.aac", "mic-002.aac"])
         XCTAssertEqual(micTrack.segments[0].end_offset_ms, 1000)
         XCTAssertEqual(micTrack.interruptions.count, 1)
         XCTAssertNotNil(micTrack.interruptions[0].recovered_offset_ms)
         let systemTrack = meta.tracks.first { $0.kind == .system }!
         XCTAssertEqual(systemTrack.status, .complete)
-        XCTAssertEqual(systemTrack.segments.map(\.file), ["system.caf"])
+        XCTAssertEqual(systemTrack.segments.map(\.file), ["system.aac"])
     }
 
     func testExhaustedRetriesDegradeOnceAndFinalizeIncomplete() throws {
@@ -214,7 +262,33 @@ final class RecordingSessionTests: XCTestCase {
 
         // Metadata is still parseable and truthful.
         let meta = try readMeta(session)
-        XCTAssertEqual(meta.tracks.first { $0.kind == .mic }!.segments.map(\.file), ["mic.caf"])
+        XCTAssertEqual(meta.tracks.first { $0.kind == .mic }!.segments.map(\.file), ["mic.aac"])
+    }
+
+    func testATeardownThatTimesOutDegradesTheTrackWithoutRestartingIt() throws {
+        var degradedTracks: [TrackKind] = []
+        let session = try makeSession()
+        session.onDegraded = { degradedTracks.append($0) }
+        try session.start()
+        tick(session, at: 1000)
+
+        // The mic stalls and its teardown wedges on the way to a restart.
+        mic.stopTimesOut = true
+        mic.writes(first: 500, last: 1000)
+        tick(session, at: 6000, micStalled: true)
+        tick(session, at: 7000, micStalled: true)
+        XCTAssertEqual(mic.startsWhileWedged, 0)
+        XCTAssertEqual(degradedTracks, [.mic])
+
+        // Stop doesn't wait on the blocked queue again, and keeps what the
+        // mic wrote before it wedged.
+        time.ms = 8000
+        let result = session.stop()
+        XCTAssertEqual(mic.stopCalls, 1)
+        XCTAssertEqual(result.status, .incomplete)
+        let micTrack = try readMeta(session).tracks.first { $0.kind == .mic }!
+        XCTAssertEqual(micTrack.status, .incomplete)
+        XCTAssertEqual(micTrack.segments.map(\.file), ["mic.aac"])
     }
 
     func testStartupFailureRollsBackStartedTracks() throws {
@@ -222,7 +296,10 @@ final class RecordingSessionTests: XCTestCase {
         let session = try makeSession()
         XCTAssertThrowsError(try session.start())
         // System started first and must be torn down again.
-        XCTAssertEqual(system.startedFiles, ["system.caf"])
-        XCTAssertNil(system.stop())  // already stopped by rollback
+        XCTAssertEqual(system.startedFiles, ["system.aac"])
+        XCTAssertNil(system.stop().stats)  // already stopped by rollback
+        // No manifest, so launch doesn't recover a meeting that never started.
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: session.dir.appendingPathComponent(SessionMeta.manifestFile).path))
     }
 }

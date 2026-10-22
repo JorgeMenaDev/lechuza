@@ -35,13 +35,16 @@ On the Meetings page, every meeting shows its title, date, length and state: rec
 - **Show in Finder** or **Delete** (to the Trash).
 - **Retry** a transcription that failed.
 
+If the engine crashes mid-meeting, Lechuza recovers the recording when the engine restarts, marks it incomplete, and transcribes it.
+
 Each meeting is a plain folder in `~/Documents/Lechuza/Meetings/<yyyy-MM-dd-HHmm>/`:
 
 | File | What it is |
 | --- | --- |
-| `mic.caf`, `system.caf` | The two tracks, AAC. A capture restart adds `mic-002.caf`… |
+| `mic.aac`, `system.aac` | The two tracks, AAC (ADTS, so a crash never leaves them unreadable). A capture restart adds `mic-002.aac`… |
 | `meeting.m4a` | Both tracks mixed, for playback |
 | `transcript.md`, `transcript.json` | The `me` / `them` transcript with timestamps |
+| `recording.json` | While recording, the tracks so far. A crash leaves it behind, and the next launch recovers the meeting from it |
 | `meta.json` | Start, length, track health and your title |
 
 Lechuza has no echo cancellation yet: without headphones, your microphone also hears the other side, so some of their words appear under `me` too.
@@ -103,7 +106,7 @@ engine/                Swift package: the lechuza-engine helper
 A meeting, step by step:
 
 1. **Start** sends `meeting.start` to the engine. macOS asks for Microphone and System Audio Recording on behalf of Lechuza, because the engine is its child process.
-2. The engine writes both tracks to the meeting folder and streams input levels back.
+2. The engine writes both tracks to the meeting folder, lists them in `recording.json` as it goes, and streams input levels back.
 3. **Stop** sends `meeting.stop`. The engine finishes the tracks, writes `meta.json` and mixes `meeting.m4a`.
 4. The app queues `transcription.start`. The engine downloads the model if needed, transcribes each track, and writes the transcript.
 5. The main process broadcasts every change to the window, which renders it.

@@ -95,6 +95,7 @@ export class Meetings {
         this.#recording = { id: path.basename(event.dir), startedAt: Date.parse(event.startedAt) };
         // Fetch the model during the meeting, not after it.
         if (this.model.state !== "ready") this.engine.send({ type: "model.prepare" });
+        this.next();
         break;
       case "meeting.level":
         this.listener.onLevels({ mic: event.mic, system: event.system });
@@ -110,6 +111,7 @@ export class Meetings {
       case "meeting.failed":
         if (this.#phase === "starting") this.#phase = "idle";
         this.notice = event.message;
+        this.next();
         break;
       case "model.progress":
         this.model = { state: "downloading", phase: event.phase, fraction: event.fraction };
@@ -137,15 +139,23 @@ export class Meetings {
   // The engine process ended. A meeting it was recording ends without
   // meta.json and lists as failed; a transcription it was running is marked
   // failed, so a meeting that crashes the engine isn't retried forever.
+  // Memory resets first, so a failure marker that can't be written (the
+  // folder was trashed) never leaves the queue stuck.
   async engineExited(): Promise<void> {
+    const interrupted = this.current;
     if (this.#phase !== "idle") this.notice = "The recording engine stopped unexpectedly.";
     this.#phase = "idle";
     this.#recording = null;
-    if (this.current) await this.library.recordFailure(this.current, "The engine stopped while transcribing.");
     this.current = null;
     this.queue = [];
     this.model = { state: "unknown" };
-    this.publish();
+    try {
+      if (interrupted) await this.library.recordFailure(interrupted, "The engine stopped while transcribing.");
+    } catch (error) {
+      console.error(`Couldn't mark ${interrupted} as failed: ${String(error)}`);
+    } finally {
+      this.publish();
+    }
   }
 
   private enqueue(id: string): void {
@@ -154,12 +164,15 @@ export class Meetings {
     this.next();
   }
 
+  // Never transcribes the folder being recorded: it is queued again when the
+  // meeting stops. While a meeting starts, its folder isn't known yet (a launch
+  // scan may have queued it), so the queue waits for meeting.started or failed.
   private next(): void {
-    if (this.current) return;
+    if (this.current || this.#phase === "starting") return;
     const id = this.queue.shift();
     if (id === undefined) return;
     const dir = this.library.dir(id);
-    if (!dir) return this.next();
+    if (!dir || id === this.#recording?.id) return this.next();
     this.current = id;
     this.engine.send({ type: "transcription.start", dir });
   }

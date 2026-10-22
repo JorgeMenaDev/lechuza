@@ -75,12 +75,16 @@ enum Mixer {
         guard reader.startReading() else { throw MixError.failed("\(reader.error.map { "\($0)" } ?? "reader")") }
         guard writer.startWriting() else { throw MixError.failed("\(writer.error.map { "\($0)" } ?? "writer")") }
         writer.startSession(atSourceTime: .zero)
-        // Offline, so polling for writer readiness costs nothing noticeable.
-        while let buffer = output.copyNextSampleBuffer() {
-            while !input.isReadyForMoreMediaData {
-                try await Task.sleep(for: .milliseconds(5))
+        do {
+            while let buffer = output.copyNextSampleBuffer() {
+                try await waitForInput(input, of: writer)
+                guard input.append(buffer) else { break }
             }
-            guard input.append(buffer) else { break }
+        } catch {
+            reader.cancelReading()
+            writer.cancelWriting()
+            try? FileManager.default.removeItem(at: temp)
+            throw error
         }
         input.markAsFinished()
         await writer.finishWriting()
@@ -91,5 +95,17 @@ enum Mixer {
             throw MixError.failed(error.map { "\($0)" } ?? "unknown error")
         }
         _ = try FileManager.default.replaceItemAt(dir.appendingPathComponent(fileName), withItemAt: temp)
+    }
+
+    /// Wait until `input` takes more data. Offline, so polling costs nothing
+    /// noticeable. Throws once the writer has failed (a full disk) or been
+    /// cancelled, since its input never becomes ready again.
+    static func waitForInput(_ input: AVAssetWriterInput, of writer: AVAssetWriter) async throws {
+        while !input.isReadyForMoreMediaData {
+            guard writer.status == .writing else {
+                throw MixError.failed(writer.error.map { "\($0)" } ?? "the writer stopped")
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
     }
 }

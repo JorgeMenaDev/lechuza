@@ -26,7 +26,7 @@ function parseRange(header: string | null, size: number): Range {
 // so the player can seek.
 export async function handleMediaRequest(library: MeetingLibrary, request: Request): Promise<Response> {
   const id = decodeURIComponent(new URL(request.url).pathname.replace(/^\//, ""));
-  const file = library.mixFile(id);
+  const file = await library.mixFile(id);
   const stat = file ? await fs.stat(file).catch(() => null) : null;
   if (!file || !stat) return new Response("Not found", { status: 404 });
 

@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 
 @testable import LechuzaEngine
@@ -34,11 +35,11 @@ final class SessionMetaTests: XCTestCase {
                     status: .recovered,
                     segments: [
                         SessionMeta.Segment(
-                            file: "mic.caf", start_offset_ms: 18, end_offset_ms: 1_687_869,
+                            file: "mic.aac", start_offset_ms: 18, end_offset_ms: 1_687_869,
                             frames_written: 81_016_832, sample_rate_hz: 48000, channels: 1
                         ),
                         SessionMeta.Segment(
-                            file: "mic-002.caf", start_offset_ms: 1_691_120, end_offset_ms: 2_200_014,
+                            file: "mic-002.aac", start_offset_ms: 1_691_120, end_offset_ms: 2_200_014,
                             frames_written: 24_426_720, sample_rate_hz: 48000, channels: 1
                         ),
                     ],
@@ -56,7 +57,7 @@ final class SessionMetaTests: XCTestCase {
                     status: .complete,
                     segments: [
                         SessionMeta.Segment(
-                            file: "system.caf", start_offset_ms: 0, end_offset_ms: 2_200_000,
+                            file: "system.aac", start_offset_ms: 0, end_offset_ms: 2_200_000,
                             frames_written: 105_600_000, sample_rate_hz: 48000, channels: 2
                         )
                     ],
@@ -78,9 +79,9 @@ final class SessionMetaTests: XCTestCase {
         XCTAssertEqual(
             inputs,
             [
-                SessionMeta.TrackInput(file: "mic.caf", speaker: "me", offsetMs: 18),
-                SessionMeta.TrackInput(file: "mic-002.caf", speaker: "me", offsetMs: 1_691_120),
-                SessionMeta.TrackInput(file: "system.caf", speaker: "them", offsetMs: 0),
+                SessionMeta.TrackInput(file: "mic.aac", speaker: "me", offsetMs: 18),
+                SessionMeta.TrackInput(file: "mic-002.aac", speaker: "me", offsetMs: 1_691_120),
+                SessionMeta.TrackInput(file: "system.aac", speaker: "them", offsetMs: 0),
             ])
     }
 
@@ -89,9 +90,31 @@ final class SessionMetaTests: XCTestCase {
         XCTAssertThrowsError(try SessionMeta.readInputs(from: dir))
     }
 
+    /// A crash leaves the segment being written unclosed. Its file must
+    /// still read back, or a crashed meeting has nothing to recover.
+    func testASegmentFileReadsBackBeforeItIsClosed() throws {
+        let url = dir.appendingPathComponent(TrackKind.mic.segmentFile(index: 1))
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 1))
+        let writer = try AVAudioFile(
+            forWriting: url,
+            settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: 48000, AVNumberOfChannelsKey: 1],
+            commonFormat: .pcmFormatFloat32,
+            interleaved: false
+        )
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4800))
+        buffer.frameLength = 4800
+        for i in 0..<4800 { buffer.floatChannelData![0][i] = sin(Float(i) * 0.06) * 0.3 }
+        for _ in 0..<20 { try writer.write(from: buffer) }  // 2 s
+
+        try withExtendedLifetime(writer) {
+            let reader = try AVAudioFile(forReading: url)
+            XCTAssertGreaterThan(Double(reader.length) / reader.fileFormat.sampleRate, 1.5)
+        }
+    }
+
     func testSegmentFileNaming() {
-        XCTAssertEqual(TrackKind.mic.segmentFile(index: 1), "mic.caf")
-        XCTAssertEqual(TrackKind.mic.segmentFile(index: 2), "mic-002.caf")
-        XCTAssertEqual(TrackKind.system.segmentFile(index: 3), "system-003.caf")
+        XCTAssertEqual(TrackKind.mic.segmentFile(index: 1), "mic.aac")
+        XCTAssertEqual(TrackKind.mic.segmentFile(index: 2), "mic-002.aac")
+        XCTAssertEqual(TrackKind.system.segmentFile(index: 3), "system-003.aac")
     }
 }

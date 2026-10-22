@@ -25,6 +25,22 @@ struct SegmentStats: Sendable {
     var channels: Int
 }
 
+/// How stopping a segment went.
+enum SegmentStop: Sendable {
+    /// The segment closed. Stats are nil when no segment was active.
+    case stopped(SegmentStats?)
+    /// Core Audio teardown didn't return in time. The recorder's control
+    /// queue is still blocked, so starting it again would block the caller
+    /// too. Stats are what the segment had written by then.
+    case timedOut(SegmentStats?)
+
+    var stats: SegmentStats? {
+        switch self {
+        case .stopped(let stats), .timedOut(let stats): stats
+        }
+    }
+}
+
 /// The operations `RecordingSession` needs from a capture path. One start/stop
 /// pair is one segment; recovery stops the recorder and starts it again on the
 /// next numbered file. Concrete recorders serialize graph/tap construction and
@@ -38,10 +54,9 @@ protocol TrackRecorder: AnyObject {
     /// queue; the session hops it to the main actor.
     func start(url: URL, clock: SessionClock, onEvent: @escaping @Sendable (RecorderEvent) -> Void) throws
 
-    /// Stop the current segment and return its stats, or nil if no segment
-    /// was active. Bounded: a wedged Core Audio teardown must not hang the
-    /// caller indefinitely.
-    func stop() -> SegmentStats?
+    /// Stop the current segment. Bounded: a wedged Core Audio teardown
+    /// returns `.timedOut` instead of hanging the caller.
+    func stop() -> SegmentStop
 
     /// Current segment's callback telemetry, for the watchdog.
     func telemetry() -> TelemetrySnapshot
