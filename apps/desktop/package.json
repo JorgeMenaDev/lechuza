@@ -1,5 +1,6 @@
 {
   "name": "@lechuza/desktop",
+  "productName": "Lechuza",
   "version": "0.1.0",
   "private": true,
   "description": "Lechuza: on-device dictation and meeting transcripts for macOS.",
