@@ -76,7 +76,7 @@ final class DictationTests: XCTestCase {
         pasteboard.releaseGlobally()
     }
 
-    private func dictation(hearing texts: [String]) -> Dictation {
+    private func dictation(hearing texts: [String], holdFor: Duration = .milliseconds(50)) -> Dictation {
         let paster = Paster(
             system: Paster.System(
                 trusted: { true },
@@ -89,7 +89,7 @@ final class DictationTests: XCTestCase {
                     return true
                 },
                 pasteboard: pasteboard),
-            holdFor: .milliseconds(50))
+            holdFor: holdFor)
         return Dictation(
             emit: { [events] in events!.append($0) },
             speech: FakeSpeech(texts),
@@ -179,6 +179,25 @@ final class DictationTests: XCTestCase {
         dictation.handle(.release, at: 3)
         await until { read.count == 2 && pasteboard.string(forType: .string) == "copied before" }
         XCTAssertEqual(read, ["First.", "Second."])
+        XCTAssertEqual(pasteboard.string(forType: .string), "copied before")
+    }
+
+    /// The app quits during a paste's hold with another dictation queued (a
+    /// meeting still saving keeps the engine alive): the queued one is never
+    /// pasted, and the user's clipboard comes back at once.
+    func testQuittingThrowsAwayQueuedDictationsAndGivesTheClipboardBack() async {
+        pasteboard.clearContents()
+        pasteboard.setString("copied before", forType: .string)
+        let dictation = dictation(hearing: ["First.", "Second."], holdFor: .seconds(1))
+        dictation.handle(.press, at: 0)
+        dictation.handle(.release, at: 1)
+        dictation.handle(.press, at: 2)
+        dictation.handle(.release, at: 3)
+        await until { pasted.count == 1 }
+        dictation.quit()
+        XCTAssertEqual(pasteboard.string(forType: .string), "copied before")
+        try? await Task.sleep(for: .milliseconds(1300))
+        XCTAssertEqual(pasted, ["First."])
         XCTAssertEqual(pasteboard.string(forType: .string), "copied before")
     }
 }

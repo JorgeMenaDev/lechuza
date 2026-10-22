@@ -185,8 +185,15 @@ final class Dictation {
         await paster.giveBack()
     }
 
-    /// The engine is quitting: put back a clipboard a paste still holds.
+    /// The engine is quitting (a meeting may still be saving): stop listening,
+    /// throw away the dictation under way and those not yet pasted, and put
+    /// back a clipboard a paste still holds.
     func quit() {
+        keys?.stop()
+        keys = nil
+        handle(.interrupted, at: ProcessInfo.processInfo.systemUptime)
+        generation += 1
+        pending = 0
         paster.giveBackNow()
     }
 
