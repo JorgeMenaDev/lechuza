@@ -18,7 +18,12 @@ function isSurface(value: string): value is Surface {
 }
 
 const requested = window.location.hash.replace(/^#\/?/, "").split("/")[0] ?? "";
-const Root = SURFACES[isSurface(requested) ? requested : "main"];
+const surface: Surface = isSurface(requested) ? requested : "main";
+// Set before React renders, so the Flow bar's window is transparent even while
+// its state hasn't arrived (on first launch it waits for macOS to grant
+// Documents). Main shows that window only once the page has laid out.
+document.documentElement.dataset.surface = surface;
+const Root = SURFACES[surface];
 const container = document.getElementById("root");
 if (container) {
   createRoot(container).render(

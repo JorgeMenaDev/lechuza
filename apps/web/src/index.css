@@ -1303,7 +1303,7 @@ svg.lucide.select-chevron {
    hit area) with the tooltip above it. Each state has its own size; the
    shell eases between them in 100 ms. The pill is dark in both themes. */
 
-body:has(.flow-bar) {
+[data-surface="flow-bar"] body {
   background: transparent;
 }
 
